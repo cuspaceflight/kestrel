@@ -284,10 +284,7 @@ time=micros(); //time at start of loop, in micro seconds
     // find theta 
     //need to define pitch and yaw in relation to theta which is defined as 0 at servo one and increases clockwise when looking aft to fore,
     //so let pitch be positive in theta = 0° direction and yaw be positive in theta = 90° , note these may need to be altered
-    theta = - atan(Yaw/Pitch); // minus signs may need to be added to make sure theta acts in the direction to conteract the rotation
-    //information involving the signs is lost when atan is taken, this must be retrived
-    if (Pitch < 0 && Yaw <= 0) theta = theta - M_PI;
-    if (Pitch < 0 && Yaw > 0) theta = theta + M_PI;
+    theta=atan2(Yaw,Pitch);
 
     
     if (previous_r < r_max) Integral = Integral + Heading * time_for_loop; //stop integral causing windup      
