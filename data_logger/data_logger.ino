@@ -119,15 +119,8 @@ float previous_r = 0;
 
 void setup() //setup instructions
 {
-  /* 
-  //to set the values as below comment out the value assigned to phi and zeta later
-  Freq_cut_off_1 = 0.08; //cut off frequency for pitch and yaw
-  zeta = 1/(2*Freq_cut_off_1*M_PI); //adjust this for how responsive the angles should be/dependedent on gyro
-  Freq_cut_off_2 = 0.04; //cut off frequency for roll
-  phi = 1/(2*Freq_cut_off_2*M_PI); //time constant for roll
-  */
+
   Gsensitivity = Gsensitivity * 180 / M_PI; //convert degrees per second to radians per second, note gyro output gets divided by this value
-  Matrix.Copy((float*) eye, 3, 3, (float*) R1);
   
   //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
   
@@ -137,7 +130,7 @@ void setup() //setup instructions
   
   SD.begin(); //begin SDness
   
-  myFile = SD.open("Log_C3.txt", FILE_WRITE); //create file on SD card
+  myFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
     
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
   
@@ -207,21 +200,9 @@ void setup() //setup instructions
   GyOff=GyCal/50;
   GzOff=GzCal/50;
   
-  //attach servos 
-  servo_1.attach(2);  // attaches the servo on pin 2 to the servo object 1
-  servo_2.attach(3);  // attaches the servo on pin 3 to the servo object 2
-  servo_3.attach(4);  // attaches the servo on pin 4 to the servo object 3
-    
-  servo_1.write(pos1);              // tell servo to go to position in variable 'pos1' 
-  servo_2.write(pos2);              // tell servo to go to position in variable 'pos2' 
-  servo_3.write(pos3);              // tell servo to go to position in variable 'pos3'
-     
-   //Serial.println();
-  
   //print column headers
-  //myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure, Pitch, Yaw, Roll, Mag accel, Theta, r, s1, s2, s3");
-  myFile.println("Time for loop in ms, Heading");
-  //myFile.println("Time for loop in ms, Gx Rate, Gy Rate, GzRate, Pitch, Yaw, Theta, r");
+  myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure");
+
  if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
  
 }
@@ -237,23 +218,8 @@ time=micros(); //time at start of loop, in micro seconds
   w[0] = -(1.000*readGX() - GxOff)/Gsensitivity;
   w[1] = (1.000*readGY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
   w[2] = (1.000*readGZ() - GzOff)/Gsensitivity;
-  
- //gyro angle, found by intergration 
-   /* R1 is the previous rotation matrix which rotates the inertial 
-    coordinate system to the body one
-    R2 is the new matrix updated with the rotation rates from the body frame
-    w(1) is rate of rotation about the rocket's x axis 
-    w(2) is rate of rotation about the rocket's y axis
-    w(3) is rate of rotation about the rocket's z axis
-   */
-   
-   // cross product of w converted to matrix form multiplied by time for loop and + identity matrix
-   float M[3][3] = { {1,-w[2]*time_for_loop,w[1]*time_for_loop}, {w[2]*time_for_loop,1,-w[0]*time_for_loop}, {-w[1]*time_for_loop,w[0]*time_for_loop,1} }; 
-   
-   Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
-   Matrix.Copy((float*) R2, 3, 3, (float*) R1);
-   
-    if(a==0) { // only read accelerometer when on the ground
+
+    
   //Accelerometer Read data from each axis, 2 registers per axis
     Ax = readAX(); 
     Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
@@ -262,100 +228,39 @@ time=micros(); //time at start of loop, in micro seconds
     Az = readAZ();
     Accz = Az/Asensitivity-accel_center_z;
     Mag_acc=sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
-    }
-    
-    //Serial.println(Mag_acc);
    
-  if(Mag_acc<30 && a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
+  if(Mag_acc<20 && a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
      // Serial.println("Low acceleration mode");
-      //angles from gyro will drift slowly, these need to be kept constant while the sensor is stationary
-      //so set them to 0 whilst on the ground 
-    //set R1 = to indentity matrix
-    Matrix.Copy((float*) eye, 3, 3, (float*) R1);
     }
   else {
     digitalWrite(led2Pin, HIGH ); //turn red led on
     //Serial.println("High acceleration mode");
-    Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
-
-    Pitch = asin( Matrix.dot((float*)R1,(float*)J,3,3,3) ); //this gives the angle between the z axis and the horizontal plan (in which I and K reside) when no pitch is required this angle will be 0
-    Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
-    Heading = acos(Matrix.dot((float*)R1,(float*)J,3,3,2) );
-  
-  if (Pitch == 0) Pitch = 0.00001; // so we don't get divide by 0
-  
-    // find theta 
-    //need to define pitch and yaw in relation to theta which is defined as 0 at servo one and increases clockwise when looking aft to fore,
-    //so let pitch be positive in theta = 0° direction and yaw be positive in theta = 90° , note these may need to be altered
-    theta=atan2(Yaw,Pitch);
-
     
-    if (previous_r < r_max) Integral = Integral + Heading * time_for_loop; //stop integral causing windup      
-    Der = (Heading - previous_Heading)/ time_for_loop; // might want a low pass filter on here
-    previous_Heading = Heading;
-    //PID control to find r, r is a scalar which can be found from the magntiude of the rotation, aka the heading
-    r = Kp * Heading + Ki * Integral + Kd * Der;
-    previous_r = r;
-    if (r > r_max) r = r_max;
-    //delay(1000);
-   
-    //convert into servo movements
-    //do {
-      s_a=sqrt(sq(r*cos(theta)+d*1-D*1)+sq(r*sin(theta))); //angle in radians 
-      s_b=sqrt(sq(r*cos(theta)+d*-0.5-D*-0.5)+sq(r*sin(theta)+d*0.866-D*0.866)); //angle in radians 
-      s_c=sqrt(sq(r*cos(theta)+d*-0.5-D*-0.5)+sq(r*sin(theta)+d*-0.866-D*-0.866)); //angle in radians 
-      
-      s_a = s_a-link;
-      s_b = s_b-link;
-      s_c = s_c-link;
-      
-      //convert these into servo angles
-      temp1=(2*s_a+2*link-1/(2*horn)-sqrt(sq(1/(2*horn)-2*link-2*s_a)-4*(sq(s_a)+2*link*s_a)*(1+1/(8*pow(horn,3)))))/(2*(1+1/(8*pow(horn,3))));
-      temp2=(2*s_b+2*link-1/(2*horn)-sqrt(sq(1/(2*horn)-2*link-2*s_b)-4*(sq(s_b)+2*link*s_b)*(1+1/(8*pow(horn,3)))))/(2*(1+1/(8*pow(horn,3))));
-      temp3=(2*s_c+2*link-1/(2*horn)-sqrt(sq(1/(2*horn)-2*link-2*s_c)-4*(sq(s_c)+2*link*s_c)*(1+1/(8*pow(horn,3)))))/(2*(1+1/(8*pow(horn,3))));
-      
-      // convert into servo degrees
-      s1=(180/M_PI)*asin(temp1/horn) + pos1;
-      s2=(180/M_PI)*asin(temp2/horn) + pos2;
-      s3=(180/M_PI)*asin(temp3/horn) + pos3;
-      
-      //this bit needs to be made redundent
-     /* if ( s1 > smax || s2 > smax || s3 > smax  ||  s1 < smin || s2 < smin || s3 < smin ) r=r-1; // if calculated servo movement exceeds maximum possible reduce r by 1
-    
-    } while ( s1 > smax || s2 > smax || s3 > smax  ||  s1 < smin || s2 < smin || s3 < smin ); //if r has been reduced new values for s1, s2 and s3 must be calculated
-  */
-    //update servos with new positions
-    servo_1.write(s1);              
-    servo_2.write(s2);               
-    servo_3.write(s3);   
-  
- /*  //read magnetometer
+ //read magnetometer
   Mx=readMX();
   My=readMY();
   Mz=readMZ();
   
-    
+  //read pressure sensor  
   temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
   pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
-  */
-  
   
   //print data to file on SD card, using commas to seperate
-  //myFile.print(time*0.000001);
-  //myFile.print(",   ");
-  //myFile.print(time_for_loop*1000);
-  /*myFile.print(",   ");
+  myFile.print(time*0.000001);
+  myFile.print(",   ");
+  myFile.print(time_for_loop*1000);
+  myFile.print(",   ");
   myFile.print(Accx);
   myFile.print(",    ");
   myFile.print(Accy);
   myFile.print(",    ");
   myFile.print(Accz);
   myFile.print(",    ");
-  myFile.print(GxRate);
+  myFile.print(w[0]);
   myFile.print(",    ");
-  myFile.print(GyRate);
+  myFile.print(w[1]);
   myFile.print(",    ");
-  myFile.print(GzRate);
+  myFile.print(w[2]);
   myFile.print(",    ");
   myFile.print(Mx);
   myFile.print(",    ");
@@ -365,35 +270,10 @@ time=micros(); //time at start of loop, in micro seconds
   myFile.print(",    ");
   myFile.print(temperature);
   myFile.print(",    ");
-  myFile.print(pressure);
-  myFile.print(",    ");
-  myFile.print(Pitch);
-  myFile.print(",    ");
-  /*myFile.print(Yaw);
-  myFile.print(",    ");
-  //myFile.print(Mag_acc);
-  //myFile.print(",    ");
-  myFile.print(theta);
-  myFile.print(",    ");
-  /*myFile.print(r); 
-  myFile.println(",    ");
-  /*myFile.print(s1);
-  myFile.print(",    ");
-  myFile.print(s2);
-  myFile.print(",    ");
-  myFile.println(s3); 
-  */
-  
-  //abridged version look at storing this in memory
-  myFile.print(time_for_loop*1000);
-  myFile.print(",   ");
-  myFile.println(Heading);
+  myFile.println(pressure);
 
  a=1;
   }
-
-//Wait 10ms before reading the values again. (Remember, the output rate was set to 100hz and 1reading per 10ms = 100hz.)
-  //delay(10);
   
   //if statement sets start time when data starts to be recorded
   if (a==1 and b==0) { 
