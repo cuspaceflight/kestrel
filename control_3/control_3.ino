@@ -47,7 +47,8 @@ File myFile; //holds information on file ebing written to on SD card
 int i=1, n=0, a=0, b=0; //used in for and if statements
 int Ax, Ay, Az; //triple axis data for accelormeter 
 int Mx, My, Mz; //triple axis data for magnetometer
-int ledPin = 8;  // LED is connected to pin 8
+int led1Pin = 8;  // green LED is connected to pin 8
+int led2Pin = 7;  // red LED is connected to pin 8
 
 unsigned long time=0, start_time = 0, record_time = 0; //long variables for dealing with time 
 
@@ -131,7 +132,8 @@ void setup() //setup instructions
   //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
   
   pinMode(10, OUTPUT); //set SD CS pin to output
-  pinMode(ledPin, OUTPUT); // Set the LED pin as output
+  pinMode(led1Pin, OUTPUT); // Set the LED 1 pin as output
+  pinMode(led2Pin, OUTPUT); // Set the LED 2 pin as output
   
   SD.begin(); //begin SDness
   
@@ -220,7 +222,7 @@ void setup() //setup instructions
   //myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure, Pitch, Yaw, Roll, Mag accel, Theta, r, s1, s2, s3");
   myFile.println("Time for loop in ms, Heading");
   //myFile.println("Time for loop in ms, Gx Rate, Gy Rate, GzRate, Pitch, Yaw, Theta, r");
-  if(myFile) digitalWrite(ledPin, HIGH);   // turn LED on if file has been created successfully
+  if(myFile) digitalWrite(led1Pin, HIGH);   // turn LED on if file has been created successfully
  
 }
 
@@ -276,6 +278,7 @@ void loop()
     Matrix.Copy((float*) eye, 3, 3, (float*) R1);
   }
   else {
+    digitalWrite(led2Pin, HIGH ); //turn red led on
     //Serial.println("High acceleration mode");
     Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
 
@@ -393,9 +396,6 @@ void loop()
 
     a=1;
   }
-
-  //Wait 10ms before reading the values again. (Remember, the output rate was set to 100hz and 1reading per 10ms = 100hz.)
-  //delay(10);
   
   //if statement sets start time when data starts to be recorded
   if (a==1 and b==0) { 
@@ -411,7 +411,8 @@ void loop()
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos' 
     servo_2.write(pos2);              // tell servo to go to position in variable 'pos' 
     servo_3.write(pos3);              // tell servo to go to position in variable 'pos' 
-    digitalWrite(ledPin, LOW);    // turn LED off
+    digitalWrite(led1Pin, LOW);    // turn LED off
+    digitalWrite(led2Pin, LOW);    // turn LED off
     delay(100000000); //is there a way to break out of the loop
     
   }

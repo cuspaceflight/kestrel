@@ -133,7 +133,6 @@ void setup() //setup instructions
   myFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
     
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
-  
     
   writeTo(Maddress, 0x02, 0x00); //Put the HMC5883 IC into the correct operating mode,continuous measurement mode
   
@@ -163,16 +162,16 @@ void setup() //setup instructions
    
 //set accelerometer offsets to 0
  int AxOff=5, AyOff=5, AzOff=5; //for some strange reason setting these to 0 gave more false readings
-   writeTo(Aaddress, 0x1E, AxOff);
-   writeTo(Aaddress, 0x1F, AyOff);
-   writeTo(Aaddress, 0x20, AzOff);
+ writeTo(Aaddress, 0x1E, AxOff);
+ writeTo(Aaddress, 0x1F, AyOff);
+ writeTo(Aaddress, 0x20, AzOff);
    
-   delay(1000); //make sure everything is static
+ delay(1000); //make sure everything is static
   
     //Accelerometer Calibration
  float AxCal=0, AyCal=0, AzCal=0; 
  //find average values at rest 
-   for (i=0; i<25; i++) {
+ for (i=0; i<25; i++) {
     //Read the x,y and z output rates from the accelerometer.
     AxCal = AxCal + readAX();
     AyCal = AyCal - readAY(); //make upwards positive
@@ -188,7 +187,7 @@ void setup() //setup instructions
     //Gyro Calibration
   int GxCal=0, GyCal=0, GzCal=0; 
   
-   for (i=0; i<50; i++) {
+ for (i=0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
     GxCal = GxCal + readGX();
     GyCal = GyCal + readGY();
@@ -203,7 +202,7 @@ void setup() //setup instructions
   //print column headers
   myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure");
 
- if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
+if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
  
 }
 
@@ -231,48 +230,48 @@ time=micros(); //time at start of loop, in micro seconds
    
   if(Mag_acc<20 && a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
      // Serial.println("Low acceleration mode");
-    }
+  }
   else {
     digitalWrite(led2Pin, HIGH ); //turn red led on
     //Serial.println("High acceleration mode");
     
- //read magnetometer
-  Mx=readMX();
-  My=readMY();
-  Mz=readMZ();
+    //read magnetometer
+    Mx=readMX();
+    My=readMY();
+    Mz=readMZ();
   
-  //read pressure sensor  
-  temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
-  pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
+    //read pressure sensor  
+    temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
+    pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
+    
+    //print data to file on SD card, using commas to seperate
+    myFile.print(time*0.000001);
+    myFile.print(",   ");
+    myFile.print(time_for_loop*1000);
+    myFile.print(",   ");
+    myFile.print(Accx);
+    myFile.print(",    ");
+    myFile.print(Accy);
+    myFile.print(",    ");
+    myFile.print(Accz);
+    myFile.print(",    ");
+    myFile.print(w[0]);
+    myFile.print(",    ");
+    myFile.print(w[1]);
+    myFile.print(",    ");
+    myFile.print(w[2]);
+    myFile.print(",    ");
+    myFile.print(Mx);
+    myFile.print(",    ");
+    myFile.print(My);
+    myFile.print(",    ");
+    myFile.print(Mz);
+    myFile.print(",    ");
+    myFile.print(temperature);
+    myFile.print(",    ");
+    myFile.println(pressure);
   
-  //print data to file on SD card, using commas to seperate
-  myFile.print(time*0.000001);
-  myFile.print(",   ");
-  myFile.print(time_for_loop*1000);
-  myFile.print(",   ");
-  myFile.print(Accx);
-  myFile.print(",    ");
-  myFile.print(Accy);
-  myFile.print(",    ");
-  myFile.print(Accz);
-  myFile.print(",    ");
-  myFile.print(w[0]);
-  myFile.print(",    ");
-  myFile.print(w[1]);
-  myFile.print(",    ");
-  myFile.print(w[2]);
-  myFile.print(",    ");
-  myFile.print(Mx);
-  myFile.print(",    ");
-  myFile.print(My);
-  myFile.print(",    ");
-  myFile.print(Mz);
-  myFile.print(",    ");
-  myFile.print(temperature);
-  myFile.print(",    ");
-  myFile.println(pressure);
-
- a=1;
+   a=1;
   }
   
   //if statement sets start time when data starts to be recorded
@@ -298,7 +297,7 @@ time=micros(); //time at start of loop, in micro seconds
   time_for_loop=(micros()-time)*0.000001; //time taken from start of loop
 }
 
-  //This function will write a value to a register on a sensors.
+//This function will write a value to a register on a sensors.
 //Parameters:
 //  device: The I2C address of the sensor. 
 //  registerAddress: The address of the register on the sensor that should be written to.
