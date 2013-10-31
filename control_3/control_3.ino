@@ -47,8 +47,7 @@ File myFile; //holds information on file ebing written to on SD card
 int i=1, n=0, a=0, b=0; //used in for and if statements
 int Ax, Ay, Az; //triple axis data for accelormeter 
 int Mx, My, Mz; //triple axis data for magnetometer
-int led1Pin = 8;  // green LED is connected to pin 8
-int led2Pin = 7;  // red LED is connected to pin 8
+int ledPin = 8;  // LED is connected to pin 8
 
 unsigned long time=0, start_time = 0, record_time = 0; //long variables for dealing with time 
 
@@ -132,8 +131,7 @@ void setup() //setup instructions
   //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
   
   pinMode(10, OUTPUT); //set SD CS pin to output
-  pinMode(led1Pin, OUTPUT); // Set the LED 1 pin as output
-  pinMode(led2Pin, OUTPUT); // Set the LED 2 pin as output
+  pinMode(ledPin, OUTPUT); // Set the LED pin as output
   
   SD.begin(); //begin SDness
   
@@ -168,18 +166,18 @@ void setup() //setup instructions
   writeTo(Aaddress, 0x2D, 8); //put ADXL345 into measure mode
 
    
-//set accelerometer offsets to 0
- int AxOff=5, AyOff=5, AzOff=5; //for some strange reason setting these to 0 gave more false readings
-   writeTo(Aaddress, 0x1E, AxOff);
-   writeTo(Aaddress, 0x1F, AyOff);
-   writeTo(Aaddress, 0x20, AzOff);
+  //set accelerometer offsets to 0
+  int AxOff=5, AyOff=5, AzOff=5; //for some strange reason setting these to 0 gave more false readings
+  writeTo(Aaddress, 0x1E, AxOff);
+  writeTo(Aaddress, 0x1F, AyOff);
+  writeTo(Aaddress, 0x20, AzOff);
    
-   delay(1000); //make sure everything is static
+  delay(1000); //make sure everything is static
   
     //Accelerometer Calibration
- float AxCal=0, AyCal=0, AzCal=0; 
- //find average values at rest 
-   for (i=0; i<25; i++) {
+  float AxCal=0, AyCal=0, AzCal=0; 
+  //find average values at rest 
+  for (i=0; i<25; i++) {
     //Read the x,y and z output rates from the accelerometer.
     AxCal = AxCal + readAX();
     AyCal = AyCal - readAY(); //make upwards positive
@@ -195,7 +193,7 @@ void setup() //setup instructions
     //Gyro Calibration
   int GxCal=0, GyCal=0, GzCal=0; 
   
-   for (i=0; i<50; i++) {
+  for (i=0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
     GxCal = GxCal + readGX();
     GyCal = GyCal + readGY();
@@ -222,7 +220,7 @@ void setup() //setup instructions
   //myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure, Pitch, Yaw, Roll, Mag accel, Theta, r, s1, s2, s3");
   myFile.println("Time for loop in ms, Heading");
   //myFile.println("Time for loop in ms, Gx Rate, Gy Rate, GzRate, Pitch, Yaw, Theta, r");
- if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
+  if(myFile) digitalWrite(ledPin, HIGH);   // turn LED on if file has been created successfully
  
 }
 
@@ -230,7 +228,7 @@ void setup() //setup instructions
 
 void loop()
 {
-time=micros(); //time at start of loop, in micro seconds
+  time = micros(); //time at start of loop, in micro seconds
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
@@ -238,22 +236,26 @@ time=micros(); //time at start of loop, in micro seconds
   w[1] = (1.000*readGY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
   w[2] = (1.000*readGZ() - GzOff)/Gsensitivity;
   
- //gyro angle, found by intergration 
-   /* R1 is the previous rotation matrix which rotates the inertial 
+  //gyro angle, found by intergration 
+  /* R1 is the previous rotation matrix which rotates the inertial 
     coordinate system to the body one
     R2 is the new matrix updated with the rotation rates from the body frame
     w(1) is rate of rotation about the rocket's x axis 
     w(2) is rate of rotation about the rocket's y axis
     w(3) is rate of rotation about the rocket's z axis
-   */
+  */
    
-   // cross product of w converted to matrix form multiplied by time for loop and + identity matrix
-   float M[3][3] = { {1,-w[2]*time_for_loop,w[1]*time_for_loop}, {w[2]*time_for_loop,1,-w[0]*time_for_loop}, {-w[1]*time_for_loop,w[0]*time_for_loop,1} }; 
+  // cross product of w converted to matrix form multiplied by time for loop and + identity matrix
+  float M[3][3] = {
+    {1,-w[2]*time_for_loop,w[1]*time_for_loop},
+    {w[2]*time_for_loop,1,-w[0]*time_for_loop},
+    {-w[1]*time_for_loop,w[0]*time_for_loop,1}
+  }; 
    
-   Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
-   Matrix.Copy((float*) R2, 3, 3, (float*) R1);
+  Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
+  Matrix.Copy((float*) R2, 3, 3, (float*) R1);
    
-    if(a==0) { // only read accelerometer when on the ground
+  if(a==0) { // only read accelerometer when on the ground
   //Accelerometer Read data from each axis, 2 registers per axis
     Ax = readAX(); 
     Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
@@ -262,19 +264,18 @@ time=micros(); //time at start of loop, in micro seconds
     Az = readAZ();
     Accz = Az/Asensitivity-accel_center_z;
     Mag_acc=sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
-    }
+  }
     
     //Serial.println(Mag_acc);
    
-  if(Mag_acc<30 && a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
+  if(Mag_acc<30 and a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
      // Serial.println("Low acceleration mode");
       //angles from gyro will drift slowly, these need to be kept constant while the sensor is stationary
       //so set them to 0 whilst on the ground 
     //set R1 = to indentity matrix
     Matrix.Copy((float*) eye, 3, 3, (float*) R1);
-    }
+  }
   else {
-    digitalWrite(led2Pin, HIGH ); //turn red led on
     //Serial.println("High acceleration mode");
     Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
 
@@ -282,7 +283,7 @@ time=micros(); //time at start of loop, in micro seconds
     Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
     Heading = acos(Matrix.dot((float*)R1,(float*)J,3,3,2) );
   
-  if (Pitch == 0) Pitch = 0.00001; // so we don't get divide by 0
+    if (Pitch == 0) Pitch = 0.00001; // so we don't get divide by 0
   
     // find theta 
     //need to define pitch and yaw in relation to theta which is defined as 0 at servo one and increases clockwise when looking aft to fore,
@@ -329,70 +330,71 @@ time=micros(); //time at start of loop, in micro seconds
     servo_2.write(s2);               
     servo_3.write(s3);   
   
- /*  //read magnetometer
-  Mx=readMX();
-  My=readMY();
-  Mz=readMZ();
-  
+    /* 
+    //read magnetometer
+    Mx=readMX();
+    My=readMY();
+    Mz=readMZ();
     
-  temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
-  pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
-  */
-  
-  
-  //print data to file on SD card, using commas to seperate
-  //myFile.print(time*0.000001);
-  //myFile.print(",   ");
-  //myFile.print(time_for_loop*1000);
-  /*myFile.print(",   ");
-  myFile.print(Accx);
-  myFile.print(",    ");
-  myFile.print(Accy);
-  myFile.print(",    ");
-  myFile.print(Accz);
-  myFile.print(",    ");
-  myFile.print(GxRate);
-  myFile.print(",    ");
-  myFile.print(GyRate);
-  myFile.print(",    ");
-  myFile.print(GzRate);
-  myFile.print(",    ");
-  myFile.print(Mx);
-  myFile.print(",    ");
-  myFile.print(My);
-  myFile.print(",    ");
-  myFile.print(Mz);
-  myFile.print(",    ");
-  myFile.print(temperature);
-  myFile.print(",    ");
-  myFile.print(pressure);
-  myFile.print(",    ");
-  myFile.print(Pitch);
-  myFile.print(",    ");
-  /*myFile.print(Yaw);
-  myFile.print(",    ");
-  //myFile.print(Mag_acc);
-  //myFile.print(",    ");
-  myFile.print(theta);
-  myFile.print(",    ");
-  /*myFile.print(r); 
-  myFile.println(",    ");
-  /*myFile.print(s1);
-  myFile.print(",    ");
-  myFile.print(s2);
-  myFile.print(",    ");
-  myFile.println(s3); 
-  */
-  
-  //abridged version look at storing this in memory
-  myFile.print(time_for_loop*1000);
-  myFile.print(",   ");
-  myFile.println(Heading);
+      
+    temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
+    pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
+    */
+    
+    
+    //print data to file on SD card, using commas to seperate
+    //myFile.print(time*0.000001);
+    //myFile.print(",   ");
+    //myFile.print(time_for_loop*1000);
+    /*myFile.print(",   ");
+    myFile.print(Accx);
+    myFile.print(",    ");
+    myFile.print(Accy);
+    myFile.print(",    ");
+    myFile.print(Accz);
+    myFile.print(",    ");
+    myFile.print(GxRate);
+    myFile.print(",    ");
+    myFile.print(GyRate);
+    myFile.print(",    ");
+    myFile.print(GzRate);
+    myFile.print(",    ");
+    myFile.print(Mx);
+    myFile.print(",    ");
+    myFile.print(My);
+    myFile.print(",    ");
+    myFile.print(Mz);
+    myFile.print(",    ");
+    myFile.print(temperature);
+    myFile.print(",    ");
+    myFile.print(pressure);
+    myFile.print(",    ");
+    myFile.print(Pitch);
+    myFile.print(",    ");
+    /*myFile.print(Yaw);
+    myFile.print(",    ");
+    //myFile.print(Mag_acc);
+    //myFile.print(",    ");
+    myFile.print(theta);
+    myFile.print(",    ");
+    /*myFile.print(r); 
+    myFile.println(",    ");
+    /*myFile.print(s1);
+    myFile.print(",    ");
+    myFile.print(s2);
+    myFile.print(",    ");
+    myFile.println(s3); 
+    */
+    
+    //abridged version look at storing this in memory
+    myFile.print(time_for_loop*1000);
+    myFile.print(",   ");
+    myFile.println(Heading);
 
- a=1;
+    a=1;
   }
 
-//Wait 10ms before reading the values again. (Remember, the output rate was set to 100hz and 1reading per 10ms = 100hz.)
+  //Wait 10ms before reading the values again. (Remember, the output rate was set to 100hz and 1reading per 10ms = 100hz.)
   //delay(10);
   
   //if statement sets start time when data starts to be recorded
@@ -406,11 +408,10 @@ time=micros(); //time at start of loop, in micro seconds
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
   if(micros()>2E9 or (record_time > 30E6 and a==1)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     myFile.close(); //close and save SD file, otherwise precious data will be lost
-     servo_1.write(pos1);              // tell servo to go to position in variable 'pos' 
-     servo_2.write(pos2);              // tell servo to go to position in variable 'pos' 
-     servo_3.write(pos3);              // tell servo to go to position in variable 'pos' 
-    digitalWrite(led1Pin, LOW);    // turn LED off
-    digitalWrite(led2Pin, LOW);    // turn LED off
+    servo_1.write(pos1);              // tell servo to go to position in variable 'pos' 
+    servo_2.write(pos2);              // tell servo to go to position in variable 'pos' 
+    servo_3.write(pos3);              // tell servo to go to position in variable 'pos' 
+    digitalWrite(ledPin, LOW);    // turn LED off
     delay(100000000); //is there a way to break out of the loop
     
   }
@@ -418,7 +419,7 @@ time=micros(); //time at start of loop, in micro seconds
   time_for_loop=(micros()-time)*0.000001; //time taken from start of loop
 }
 
-  //This function will write a value to a register on a sensors.
+//This function will write a value to a register on a sensors.
 //Parameters:
 //  device: The I2C address of the sensor. 
 //  registerAddress: The address of the register on the sensor that should be written to.
