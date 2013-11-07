@@ -49,6 +49,7 @@ int Ax, Ay, Az; //triple axis data for accelormeter
 int Mx, My, Mz; //triple axis data for magnetometer
 int led1Pin = 8;  // green LED is connected to pin 8
 int led2Pin = 7;  // red LED is connected to pin 8
+//check pin int recoveryPin = 9;  // parachute charge is set off by pin 9
 
 unsigned long time=0, start_time = 0, record_time = 0; //long variables for dealing with time 
 
@@ -134,6 +135,8 @@ void setup() //setup instructions
   pinMode(10, OUTPUT); //set SD CS pin to output
   pinMode(led1Pin, OUTPUT); // Set the LED 1 pin as output
   pinMode(led2Pin, OUTPUT); // Set the LED 2 pin as output
+  pinMode(recoveryPin, OUTPUT); // Set the recovery pin as output
+  digitalWrite(recoveryPin, LOW); //should default to low
   
   SD.begin(); //begin SDness
   
@@ -413,6 +416,10 @@ void loop()
     servo_3.write(pos3);              // tell servo to go to position in variable 'pos' 
     digitalWrite(led1Pin, LOW);    // turn LED off
     digitalWrite(led2Pin, LOW);    // turn LED off
+    delay(1000); //wait a second
+    digitalWrite(recoveryPin, HIGH); //deploy chute
+    delay(3000); //wait 3 seconds
+    digitalWrite(recoveryPin, LOW); //turn off mosfet
     delay(100000000); //is there a way to break out of the loop
     
   }
