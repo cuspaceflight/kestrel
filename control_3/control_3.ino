@@ -49,7 +49,7 @@ int Ax, Ay, Az; //triple axis data for accelormeter
 int Mx, My, Mz; //triple axis data for magnetometer
 int led1Pin = 8;  // green LED is connected to pin 8
 int led2Pin = 7;  // red LED is connected to pin 8
-//check pin int recoveryPin = 9;  // parachute charge is set off by pin 9
+check pin int recoveryPin = 6;  // parachute charge is set off by pin 9
 
 unsigned long time=0, start_time = 0, record_time = 0; //long variables for dealing with time 
 
