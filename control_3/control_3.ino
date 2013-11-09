@@ -49,7 +49,7 @@ int Ax, Ay, Az; //triple axis data for accelormeter
 int Mx, My, Mz; //triple axis data for magnetometer
 int led1Pin = 8;  // green LED is connected to pin 8
 int led2Pin = 7;  // red LED is connected to pin 8
-check pin int recoveryPin = 6;  // parachute charge is set off by pin 9
+int recoveryPin = 6;  // parachute charge is set off by pin 9
 
 unsigned long time=0, start_time = 0, record_time = 0; //long variables for dealing with time 
 
@@ -95,7 +95,7 @@ Servo servo_3;  // create servo object to control a servo
 
 int pos1 = 95, pos2 = 90, pos3 = 90, s1, s2, s3, smax=150, smin=30, k=0;    // variable to store the servo position 
 float r=0, theta=0, s_a, s_b, s_c, temp1, temp2, temp3;
-float d=20, D=48, horn=12, link=28; //geometric values
+int d=20, D=48, horn=12, link=28; //geometric values hopefully these can be integers
 //const float pi=3.14;                
 
 // PID constants
@@ -308,29 +308,24 @@ void loop()
    
     //convert into servo movements
     //do {
-      s_a=sqrt(sq(r*cos(theta)+d*1-D*1)+sq(r*sin(theta))); //angle in radians 
-      s_b=sqrt(sq(r*cos(theta)+d*-0.5-D*-0.5)+sq(r*sin(theta)+d*0.866-D*0.866)); //angle in radians 
-      s_c=sqrt(sq(r*cos(theta)+d*-0.5-D*-0.5)+sq(r*sin(theta)+d*-0.866-D*-0.866)); //angle in radians 
+      s_a = sqrt(sq(r*cos(theta) + d - D) + sq(r*sin(theta))); //angle in radians 
+      s_b = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) + d*0.866 - D*0.866)); //angle in radians 
+      s_c = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) - d*0.866 + D*0.866)); //angle in radians 
       
       s_a = s_a-link;
       s_b = s_b-link;
       s_c = s_c-link;
       
       //convert these into servo angles
-      temp1=(2*s_a+2*link-1/(2*horn)-sqrt(sq(1/(2*horn)-2*link-2*s_a)-4*(sq(s_a)+2*link*s_a)*(1+1/(8*pow(horn,3)))))/(2*(1+1/(8*pow(horn,3))));
-      temp2=(2*s_b+2*link-1/(2*horn)-sqrt(sq(1/(2*horn)-2*link-2*s_b)-4*(sq(s_b)+2*link*s_b)*(1+1/(8*pow(horn,3)))))/(2*(1+1/(8*pow(horn,3))));
-      temp3=(2*s_c+2*link-1/(2*horn)-sqrt(sq(1/(2*horn)-2*link-2*s_c)-4*(sq(s_c)+2*link*s_c)*(1+1/(8*pow(horn,3)))))/(2*(1+1/(8*pow(horn,3))));
+      temp1=(2*s_a + 2*link - 1.0/(2*horn) - sqrt(sq(1.0/(2*horn) - 2*link - 2*s_a) - 4*(sq(s_a) + 2*link*s_a)*(1 + 1/(8*pow(horn,3)))))/(2*(1 + 1/(8*pow(horn,3))));
+      temp2=(2*s_b + 2*link - 1.0/(2*horn) - sqrt(sq(1.0/(2*horn) - 2*link - 2*s_b) - 4*(sq(s_b) + 2*link*s_b)*(1 + 1/(8*pow(horn,3)))))/(2*(1 + 1/(8*pow(horn,3))));
+      temp3=(2*s_c + 2*link - 1.0/(2*horn) - sqrt(sq(1.0/(2*horn) - 2*link - 2*s_c) - 4*(sq(s_c) + 2*link*s_c)*(1 + 1/(8*pow(horn,3)))))/(2*(1 + 1/(8*pow(horn,3))));
       
-      // convert into servo degrees
-      s1=(180/M_PI)*asin(temp1/horn) + pos1;
-      s2=(180/M_PI)*asin(temp2/horn) + pos2;
-      s3=(180/M_PI)*asin(temp3/horn) + pos3;
+      // convert into servo degrees 180/M_PI = 57
+      s1 = 57*asin(temp1/horn) + pos1;
+      s2 = 57*asin(temp2/horn) + pos2;
+      s3 = 57*asin(temp3/horn) + pos3;
       
-      //this bit needs to be made redundent
-     /* if ( s1 > smax || s2 > smax || s3 > smax  ||  s1 < smin || s2 < smin || s3 < smin ) r=r-1; // if calculated servo movement exceeds maximum possible reduce r by 1
-    
-    } while ( s1 > smax || s2 > smax || s3 > smax  ||  s1 < smin || s2 < smin || s3 < smin ); //if r has been reduced new values for s1, s2 and s3 must be calculated
-  */
     //update servos with new positions
     servo_1.write(s1);              
     servo_2.write(s2);               
