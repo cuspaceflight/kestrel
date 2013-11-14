@@ -1,4 +1,4 @@
-//Libraries
+// Libraries
 #include <Wire.h> //The Wire library is used for I2C communication
 #include <math.h> //Maths Library
 #include <SD.h> //SD library
