@@ -5,48 +5,23 @@
 #include <Servo.h> //servo library
 #include "../libraries/MatrixMath/MatrixMath.h" //matrix library
 
+//I2C devices from https://github.com/jrowberg/i2cdevlib
+#include <I2Cdev.h>
+#include <BMP085.h>
+#include <HMC5883L.h>
+#include <ITG3200.h>
+#include <ADXL345.h>
 
-//Sensor addresses
-//I2C devices each have an address. The address is defined in the datasheet for the device. The ITG-3200 breakout board can have different address depending on how
-//the jumper on top of the board is configured. By default, the jumper is connected to the VDD pin. When the jumper is connected to the VDD pin the I2C address
-//is 0x69.
-#define Aaddress 0x53 // I2C 7bit address of ADXL345 of accelerometer
-#define Gaddress 0x68 //address of ITG-3200 gyro
-#define Maddress 0x1E //0011110b, I2C 7bit address of HMC5883
-#define Baddress 0x77  // I2C address of BMP085
-
-
-//This is a list of registers in the ITG-3200. Registers are parameters that determine how the sensor will behave, or they can hold data that represent the
-//sensors current status.
-//To learn more about the registers on the ITG-3200, download and read the datasheet.
-char WHO_AM_I = 0x00;
-char SMPLRT_DIV = 0x15;
-char DLPF_FS = 0x16;
-char GYRO_XOUT_H = 0x1D;
-char GYRO_XOUT_L = 0x1E;
-char GYRO_YOUT_H = 0x1F;
-char GYRO_YOUT_L = 0x20;
-char GYRO_ZOUT_H = 0x21;
-char GYRO_ZOUT_L = 0x22;
-
-
-//This is a list of settings that can be loaded into the registers.
-//DLPF, Full Scale Register Bits
-//FS_SEL must be set to 3 for proper operation
-//Set DLPF_CFG to 3 for 1kHz Fint and 42 Hz Low Pass Filter
-char DLPF_CFG_0 = 1<<0;
-char DLPF_CFG_1 = 1<<1;
-char DLPF_CFG_2 = 1<<2;
-char DLPF_FS_SEL_0 = 1<<3;
-char DLPF_FS_SEL_1 = 1<<4;
-
+BMP085 barometer;
+HMC5883L compass;
+ADXL345 accelerometer;
+ITG3200 gyro;
 
 //Global variables
 File myFile; //holds information on file ebing written to on SD card
 
 int i = 1, n = 0, a = 0, b = 0; //used in for and if statements
 int Ax, Ay, Az; //triple axis data for accelormeter
-int Mx, My, Mz; //triple axis data for magnetometer
 int led1Pin = 8;  // green LED is connected to pin 8
 int led2Pin = 7;  // red LED is connected to pin 8
 
@@ -59,28 +34,6 @@ float Asensitivity = 3.262; //Senstivity LMB/m/s^2, 26.093 for 2g/full resolutio
 float Accx, Accy, Accz, Mag_acc; //variables for acceleration in m/s^2
 float accel_angle_x, accel_angle_y; //tilt angles from accelerometer
 float accel_center_x = 0, accel_center_y = 0, accel_center_z = 0; //alternative offsets for accelerometer which are used in the software, these seem better
-
-//Barometer variables (lots)
-const unsigned char OSS = 0;  // Oversampling Setting
-// Calibration values
-int ac1;
-int ac2;
-int ac3;
-unsigned int ac4;
-unsigned int ac5;
-unsigned int ac6;
-int b1;
-int b2;
-int mb;
-int mc;
-int md;
-
-// b5 is calculated in bmp085GetTemperature(...), this variable is also used in bmp085GetPressure(...)
-// so ...Temperature(...) must be called before ...Pressure(...).
-long b5;
-
-short temperature;
-long pressure;
 
 //inorder to calculate alltitude need to know
 //const float p0 = 100400;     // Pressure at sea level (Pa) standard 101325
@@ -117,312 +70,6 @@ float previous_Heading = 0;
 float previous_r = 0;
 
 
-//This function will write a value to a register on a sensors.
-//Parameters:
-//  device: The I2C address of the sensor.
-//  registerAddress: The address of the register on the sensor that should be written to.
-//  data: The value to be written to the specified register.
-void writeTo(int device, byte registerAddress, byte data)
-{
-  //Initiate a communication sequence with the desired i2c device
-  Wire.beginTransmission(device);
-  //Tell the I2C address which register we are writing to
-  Wire.write(registerAddress);
-  //Send the value to write to the specified register
-  Wire.write(data);
-  //End the communication sequence
-  Wire.endTransmission();
-}
-
-//This function will read the data from a specified register and return the value.
-//Parameters:
-//  device: The I2C address of the sensor.
-//  registerAddress: The address of the register on the sensor that should be read
-//Return:
-//  unsigned char: The value currently residing in the specified register
-unsigned char readFrom(int device, byte registerAddress)
-{
-  //This variable will hold the contents read from the i2c device.
-  unsigned char data = 0;
-
-  //Send the register address to be read.
-  Wire.beginTransmission(device);
-  //Send the Register Address
-  Wire.write(registerAddress);
-  //End the communication sequence.
-  Wire.endTransmission();
-
-  //Ask the I2C device for data
-  Wire.beginTransmission(device);
-  Wire.requestFrom(device, 1);
-
-  //Wait for a response from the I2C device
-  if(Wire.available()){
-    //Save the data sent from the I2C device
-    data = Wire.read();
-  }
-
-  //End the communication sequence.
-  Wire.endTransmission();
-
-  //Return the data read during the operation
-  return data;
-}
-
-//This function is used to read the X-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
-//NOTE: This value is NOT in degrees per second.
-//Usage: int xRate = readX();
-int readGX(void)
-{
-  int data = 0;
-  data = readFrom(Gaddress, GYRO_XOUT_H)<<8;
-  data |= readFrom(Gaddress, GYRO_XOUT_L);
-
-  return data;
-}
-
-//This function is used to read the Y-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
-//NOTE: This value is NOT in degrees per second.
-//Usage: int yRate = readY();
-int readGY(void)
-{
-  int data = 0;
-  data = readFrom(Gaddress, GYRO_YOUT_H)<<8;
-  data |= readFrom(Gaddress, GYRO_YOUT_L);
-
-  return data;
-}
-
-//This function is used to read the Z-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
-//NOTE: This value is NOT in degrees per second.
-//Usage: int zRate = readZ();
-int readGZ(void)
-{
-  int data = 0;
-  data = readFrom(Gaddress, GYRO_ZOUT_H)<<8;
-  data |= readFrom(Gaddress, GYRO_ZOUT_L);
-
-  return data;
-}
-
-//This function is used to read the X-Axis value of the accelerometer.
-//NOTE: This value is NOT in SI units.
-//Usage:
-int readAX(void)
-{
-  int data = 0;
-  data = readFrom(Aaddress, 0x33)<<8;
-  data |= readFrom(Aaddress, 0x32);
-
-  return data;
-}
-
-//This function is used to read the Y-Axis value of the accelerometer.
-//NOTE: This value is NOT in SI units.
-//Usage:
-int readAY(void)
-{
-  int data = 0;
-  data = readFrom(Aaddress, 0x35)<<8;
-  data |= readFrom(Aaddress, 0x34);
-
-  return data;
-}
-
-//This function is used to read the Z-Axis value of the accelerometer.
-//NOTE: This value is NOT in SI units.
-//Usage:
-int readAZ(void)
-{
-  int data = 0;
-  data = readFrom(Aaddress, 0x37)<<8;
-  data |= readFrom(Aaddress, 0x36);
-
-  return data;
-}
-
-// Read 1 byte from the BMP085 at 'address'
-char bmp085Read(unsigned char registeraddress)
-{
-  unsigned char data;
-
-  Wire.beginTransmission(Baddress);
-  Wire.write(registeraddress);
-  Wire.endTransmission();
-
-  Wire.requestFrom(Baddress, 1);
-  while(!Wire.available())
-    ;
-
-  return Wire.read();
-}
-
-// Read 2 bytes from the BMP085
-// First byte will be from 'address'
-// Second byte will be from 'address'+1
-int bmp085ReadInt(unsigned char registeraddress)
-{
-  unsigned char msb, lsb;
-
-  Wire.beginTransmission(Baddress);
-  Wire.write(registeraddress);
-  Wire.endTransmission();
-
-  Wire.requestFrom(Baddress, 2);
-  while(Wire.available()<2)
-    ;
-  msb = Wire.read();
-  lsb = Wire.read();
-
-  return (int) msb<<8 | lsb;
-}
-
-// Stores all of the bmp085's calibration values into global variables
-// Calibration values are required to calculate temp and pressure
-// This function should be called at the beginning of the program
-void bmp085Calibration()
-{
-  ac1 = bmp085ReadInt(0xAA);
-  ac2 = bmp085ReadInt(0xAC);
-  ac3 = bmp085ReadInt(0xAE);
-  ac4 = bmp085ReadInt(0xB0);
-  ac5 = bmp085ReadInt(0xB2);
-  ac6 = bmp085ReadInt(0xB4);
-  b1 = bmp085ReadInt(0xB6);
-  b2 = bmp085ReadInt(0xB8);
-  mb = bmp085ReadInt(0xBA);
-  mc = bmp085ReadInt(0xBC);
-  md = bmp085ReadInt(0xBE);
-}
-
-// Calculate temperature given ut.
-// Value returned will be in units of 0.1 deg C
-short bmp085GetTemperature(unsigned int ut)
-{
-  long x1, x2;
-
-  x1 = (((long)ut - (long)ac6)*(long)ac5) >> 15;
-  x2 = ((long)mc << 11)/(x1 + md);
-  b5 = x1 + x2;
-
-  return ((b5 + 8)>>4);
-}
-
-// Calculate pressure given up
-// calibration values must be known
-// b5 is also required so bmp085GetTemperature(...) must be called first.
-// Value returned will be pressure in units of Pa.
-long bmp085GetPressure(unsigned long up)
-{
-  long x1, x2, x3, b3, b6, p;
-  unsigned long b4, b7;
-
-  b6 = b5 - 4000;
-  // Calculate B3
-  x1 = (b2 * (b6 * b6)>>12)>>11;
-  x2 = (ac2 * b6)>>11;
-  x3 = x1 + x2;
-  b3 = (((((long)ac1)*4 + x3)<<OSS) + 2)>>2;
-
-  // Calculate B4
-  x1 = (ac3 * b6)>>13;
-  x2 = (b1 * ((b6 * b6)>>12))>>16;
-  x3 = ((x1 + x2) + 2)>>2;
-  b4 = (ac4 * (unsigned long)(x3 + 32768))>>15;
-
-  b7 = ((unsigned long)(up - b3) * (50000>>OSS));
-  if (b7 < 0x80000000)
-    p = (b7<<1)/b4;
-  else
-    p = (b7/b4)<<1;
-
-  x1 = (p>>8) * (p>>8);
-  x1 = (x1 * 3038)>>16;
-  x2 = (-7357 * p)>>16;
-  p += (x1 + x2 + 3791)>>4;
-
-  return p;
-}
-
-// Read the uncompensated temperature value
-unsigned int bmp085ReadUT()
-{
-  unsigned int ut;
-
-  // Write 0x2E into Register 0xF4
-  // This requests a temperature reading
-  writeTo(Baddress, 0xF4, 0x2E);
-
-  // Wait at least 4.5ms
-  delay(5);
-
-  // Read two bytes from registers 0xF6 and 0xF7
-  ut = bmp085ReadInt(0xF6);
-  return ut;
-}
-
-// Read the uncompensated pressure value
-unsigned long bmp085ReadUP()
-{
-  unsigned char msb, lsb, xlsb;
-  unsigned long up = 0;
-
-  // Write 0x34+(OSS<<6) into register 0xF4
-  // Request a pressure reading w/ oversampling setting
-  writeTo(Baddress, 0xF4, (0x34 + (OSS<<6)));
-
-  // Wait for conversion, delay time dependent on OSS
-  delay(2 + (3<<OSS));
-
-  // Read register 0xF6 (MSB), 0xF7 (LSB), and 0xF8 (XLSB)
-  Wire.beginTransmission(Baddress);
-  Wire.write(0xF6);
-  Wire.endTransmission();
-  Wire.requestFrom(Baddress, 3);
-
-  // Wait for data to become available
-  while(Wire.available() < 3)
-    ;
-  msb = Wire.read();
-  lsb = Wire.read();
-  xlsb = Wire.read();
-
-  up = (((unsigned long) msb << 16) | ((unsigned long) lsb << 8) | (unsigned long) xlsb) >> (8-OSS);
-
-  return up;
-}
-
-//This function is used to read the magnetometer in the X direction.
-int readMX(void)
-{
-  int data = 0;
-  data = readFrom(Maddress, 0x03)<<8; //0x03 is MSB register
-  data |= readFrom(Maddress, 0x04);  //LSB register
-
-  return data;
-}
-
-//This function is used to read the magnetometer in the Y direction.
-int readMY(void)
-{
-  int data = 0;
-  data = readFrom(Maddress, 0x07)<<8; //0x07 is MSB register
-  data |= readFrom(Maddress, 0x08);  //LSB register
-
-  return data;
-}
-
-//This function is used to read the magnetometer in the Z direction.
-int readMZ(void)
-{
-  int data = 0;
-  data = readFrom(Maddress, 0x05)<<8; //0x03 is MSB register
-  data |= readFrom(Maddress, 0x06);  //LSB register
-
-  return data;
-}
-
-
 void setup() //setup instructions
 {
 
@@ -440,64 +87,52 @@ void setup() //setup instructions
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
-  writeTo(Maddress, 0x02, 0x00); //Put the HMC5883 IC into the correct operating mode,continuous measurement mode
 
-  bmp085Calibration(); //calibrate Barometer
+  // TODO: compass.initialize();
+  compass.setMode(HMC5883L_MODE_CONTINUOUS);
 
-  //Configure the gyroscope
-  //Set the gyroscope scale for the outputs to +/-2000 degrees per second
-  //bits 3 and 4 must be 1 1 for operation, bits 1, 2 and 3 set low pass filter
-  //unofficially FS_SEL = 0 is 250°/sec, FS_SEL = 1 is 500°/sec, FS_SEL = 2 is 1000°/sec, now needs a different sensitivity factor
-  //so set value to 2 (for 100Hz Low pass filter bandwidth) + 16 (1000°/sec)
-  writeTo(Gaddress, DLPF_FS, 0x1A);
-  //Set the sample rate to 100 hz this can be changed This register determines the sample rate of the ITG-3200 gyros. The gyros outputs are sampled internally at either 1kHz or 8kHz, determined by the DLPF_CFG setting (see register 22). This sampling is then filtered digitally and delivered into the sensor registers after the number of cycles determined by this register. The sample rate is given by the following formula:
-  //Fsample = Finternal / (divider+1), where Finternal is either 1kHz or 8kHz
-  //As an example, if the internal sampling is at 1kHz, then setting this register to 7 would give the following:
-  //Fsample = 1kHz / (7 + 1) = 125Hz, or 8ms per sample
-  writeTo(Gaddress, SMPLRT_DIV, 9); //I think the time for a sample should match the loop time
+  barometer.initialize(); //calibrate Barometer
 
-   //Set the range on the ADXL345
-  writeTo(Aaddress, 0x31, 3); //0 = 2g, 1 = 4g, 2 = 8g, 3 = 16g  range, add 4 for full_res mode, not sure how that works
+  //configure tehe gyro
+  gyro.setFullScaleRange(2); // unofficially 1000°/sec, only ITG3200_FULLSCALE_2000 is documented
+  gyro.setDLPFBandwidth(ITG3200_DLPF_BW_98);
+  gyro.setRate(9); // = 100Hz - I think the time for a sample should match the loop time
 
-  //Set the frequency on the ADXL345
-  writeTo(Aaddress, 0x2C, 10); //set to 100Hz
-
-  //Set power mode on the ADXL345
-  writeTo(Aaddress, 0x2D, 8); //put ADXL345 into measure mode
-
-
-  //set accelerometer offsets to 0
-  int AxOff = 5, AyOff = 5, AzOff = 5; //for some strange reason setting these to 0 gave more false readings
-  writeTo(Aaddress, 0x1E, AxOff);
-  writeTo(Aaddress, 0x1F, AyOff);
-  writeTo(Aaddress, 0x20, AzOff);
+  // configure accelerometer
+  accelerometer.initialize();
+  accelerometer.setRange(ADXL345_RANGE_16G);
+  accelerometer.setRate(ADXL345_RATE_100); //Hz
+  accelerometer.setMeasureEnabled(true);
+  accelerometer.setOffset(5, 5, 5);  //for some strange reason setting these to 0 gave more false readings
 
   delay(1000); //make sure everything is static
 
   //Accelerometer Calibration
-  float AxCal = 0, AyCal = 0, AzCal = 0;
-  //find average values at rest
-  for (i = 0; i<25; i++) {
-    //Read the x,y and z output rates from the accelerometer.
-    AxCal = AxCal + readAX();
-    AyCal = AyCal - readAY(); //make upwards positive
-    AzCal = AzCal + readAZ();
-    delay(10);
-  }
+  {
+    float AxCal = 0, AyCal = 0, AzCal = 0;
+    //find average values at rest
+    for (i = 0; i<25; i++) {
+      //Read the x,y and z output rates from the accelerometer.
+      AxCal = AxCal + accelerometer.getAccelerationX();
+      AyCal = AyCal - accelerometer.getAccelerationY(); //make upwards positive
+      AzCal = AzCal + accelerometer.getAccelerationZ();
+      delay(10);
+    }
 
-  //Alternatvie accelerometer calibration
-  accel_center_x = (AxCal/25)/Asensitivity; //in g then in mg
-  accel_center_y = (AyCal/25)/Asensitivity + 9.81; //account for gravity
-  accel_center_z = (AzCal/25)/Asensitivity;
+    //Alternatvie accelerometer calibration
+    accel_center_x = (AxCal/25)/Asensitivity; //in g then in mg
+    accel_center_y = (AyCal/25)/Asensitivity + 9.81; //account for gravity
+    accel_center_z = (AzCal/25)/Asensitivity;
+  }
 
     //Gyro Calibration
   int GxCal = 0, GyCal = 0, GzCal = 0;
 
   for (i = 0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
-    GxCal = GxCal + readGX();
-    GyCal = GyCal + readGY();
-    GzCal = GzCal + readGZ();
+    GxCal = GxCal + gyro.getRotationX();
+    GyCal = GyCal + gyro.getRotationY();
+    GzCal = GzCal + gyro.getRotationZ();
     delay(10);
   }
   //use these to find gyro offsets
@@ -519,17 +154,17 @@ void loop() {
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = -(1.000*readGX() - GxOff)/Gsensitivity;
-  w[1] = (1.000*readGY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
-  w[2] = (1.000*readGZ() - GzOff)/Gsensitivity;
+  w[0] = -(1.000*gyro.getRotationX() - GxOff)/Gsensitivity;
+  w[1] = (1.000*gyro.getRotationY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
+  w[2] = (1.000*gyro.getRotationZ() - GzOff)/Gsensitivity;
 
 
   //Accelerometer Read data from each axis, 2 registers per axis
-  Ax = readAX();
+  Ax = accelerometer.getAccelerationX();
   Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
-  Ay = - readAY(); //make upwards positive
+  Ay = - accelerometer.getAccelerationY(); //make upwards positive
   Accy = Ay/Asensitivity-accel_center_y;
-  Az = readAZ();
+  Az = accelerometer.getAccelerationZ();
   Accz = Az/Asensitivity-accel_center_z;
   Mag_acc = sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
 
@@ -541,13 +176,12 @@ void loop() {
     //Serial.println("High acceleration mode");
 
     //read magnetometer
-    Mx = readMX();
-    My = readMY();
-    Mz = readMZ();
+    int16_t Mx, My, Mz;
+    compass.getHeading(&Mx, &My, &Mz);
 
     //read pressure sensor
-    temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
-    pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
+    float temperature = barometer.getTemperatureC(); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
+    float pressure = barometer.getPressure(); // read pressure from barometer, and convert to Pa
 
     //print data to file on SD card, using commas to seperate
     myFile.print(time*0.000001);
