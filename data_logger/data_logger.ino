@@ -39,8 +39,8 @@ char DLPF_CFG_1 = 1<<1;
 char DLPF_CFG_2 = 1<<2;
 char DLPF_FS_SEL_0 = 1<<3;
 char DLPF_FS_SEL_1 = 1<<4;
- 
- 
+
+
 //Global variables
 File myFile; //holds information on file ebing written to on SD card
 
@@ -131,14 +131,14 @@ void setup() //setup instructions
   SD.begin(); //begin SDness
   
   myFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
-    
+
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
-    
+
   writeTo(Maddress, 0x02, 0x00); //Put the HMC5883 IC into the correct operating mode,continuous measurement mode
   
   bmp085Calibration(); //calibrate Barometer
   
- //Configure the gyroscope
+  //Configure the gyroscope
   //Set the gyroscope scale for the outputs to +/-2000 degrees per second
   //bits 3 and 4 must be 1 1 for operation, bits 1, 2 and 3 set low pass filter
   //unofficially FS_SEL= 0 is 250°/sec, FS_SEL= 1 is 500°/sec, FS_SEL= 2 is 1000°/sec, now needs a different sensitivity factor
@@ -159,19 +159,19 @@ void setup() //setup instructions
       //Set power mode on the ADXL345
   writeTo(Aaddress, 0x2D, 8); //put ADXL345 into measure mode
 
-   
-//set accelerometer offsets to 0
- int AxOff=5, AyOff=5, AzOff=5; //for some strange reason setting these to 0 gave more false readings
- writeTo(Aaddress, 0x1E, AxOff);
- writeTo(Aaddress, 0x1F, AyOff);
- writeTo(Aaddress, 0x20, AzOff);
-   
- delay(1000); //make sure everything is static
-  
-    //Accelerometer Calibration
- float AxCal=0, AyCal=0, AzCal=0; 
- //find average values at rest 
- for (i=0; i<25; i++) {
+
+  //set accelerometer offsets to 0
+  int AxOff=5, AyOff=5, AzOff=5; //for some strange reason setting these to 0 gave more false readings
+  writeTo(Aaddress, 0x1E, AxOff);
+  writeTo(Aaddress, 0x1F, AyOff);
+  writeTo(Aaddress, 0x20, AzOff);
+
+  delay(1000); //make sure everything is static
+
+  //Accelerometer Calibration
+  float AxCal=0, AyCal=0, AzCal=0; 
+  //find average values at rest 
+  for (i=0; i<25; i++) {
     //Read the x,y and z output rates from the accelerometer.
     AxCal = AxCal + readAX();
     AyCal = AyCal - readAY(); //make upwards positive
@@ -187,7 +187,7 @@ void setup() //setup instructions
     //Gyro Calibration
   int GxCal=0, GyCal=0, GzCal=0; 
   
- for (i=0; i<50; i++) {
+  for (i=0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
     GxCal = GxCal + readGX();
     GyCal = GyCal + readGY();
@@ -202,15 +202,14 @@ void setup() //setup instructions
   //print column headers
   myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure");
 
-if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
- 
+  if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
+
 }
 
 
 
-void loop()
-{
-time=micros(); //time at start of loop, in micro seconds
+void loop() {
+  time=micros(); //time at start of loop, in micro seconds
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
@@ -218,18 +217,18 @@ time=micros(); //time at start of loop, in micro seconds
   w[1] = (1.000*readGY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
   w[2] = (1.000*readGZ() - GzOff)/Gsensitivity;
 
-    
+
   //Accelerometer Read data from each axis, 2 registers per axis
-    Ax = readAX(); 
-    Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
-    Ay = - readAY(); //make upwards positive
-    Accy = Ay/Asensitivity-accel_center_y;
-    Az = readAZ();
-    Accz = Az/Asensitivity-accel_center_z;
-    Mag_acc=sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
-   
+  Ax = readAX(); 
+  Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
+  Ay = - readAY(); //make upwards positive
+  Accy = Ay/Asensitivity-accel_center_y;
+  Az = readAZ();
+  Accz = Az/Asensitivity-accel_center_z;
+  Mag_acc=sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
+
   if(Mag_acc<20 && a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
-     // Serial.println("Low acceleration mode");
+    // Serial.println("Low acceleration mode");
   }
   else {
     digitalWrite(led2Pin, HIGH ); //turn red led on
@@ -239,7 +238,7 @@ time=micros(); //time at start of loop, in micro seconds
     Mx=readMX();
     My=readMY();
     Mz=readMZ();
-  
+
     //read pressure sensor  
     temperature = bmp085GetTemperature(bmp085ReadUT()); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
     pressure = bmp085GetPressure(bmp085ReadUP()); // read pressure from barometer, and convert to Pa
@@ -270,8 +269,8 @@ time=micros(); //time at start of loop, in micro seconds
     myFile.print(temperature);
     myFile.print(",    ");
     myFile.println(pressure);
-  
-   a=1;
+
+    a=1;
   }
   
   //if statement sets start time when data starts to be recorded
@@ -285,13 +284,12 @@ time=micros(); //time at start of loop, in micro seconds
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
   if(micros()>2E9 or (record_time > 30E6 and a==1)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     myFile.close(); //close and save SD file, otherwise precious data will be lost
-     servo_1.write(pos1);              // tell servo to go to position in variable 'pos' 
-     servo_2.write(pos2);              // tell servo to go to position in variable 'pos' 
-     servo_3.write(pos3);              // tell servo to go to position in variable 'pos' 
+    servo_1.write(pos1);              // tell servo to go to position in variable 'pos' 
+    servo_2.write(pos2);              // tell servo to go to position in variable 'pos' 
+    servo_3.write(pos3);              // tell servo to go to position in variable 'pos' 
     digitalWrite(led1Pin, LOW);    // turn LED off
     digitalWrite(led2Pin, LOW);    // turn LED off
     delay(100000000); //is there a way to break out of the loop
-    
   }
 
   time_for_loop=(micros()-time)*0.000001; //time taken from start of loop
@@ -479,7 +477,7 @@ long bmp085GetPressure(unsigned long up)
     p = (b7<<1)/b4;
   else
     p = (b7/b4)<<1;
-    
+
   x1 = (p>>8) * (p>>8);
   x1 = (x1 * 3038)>>16;
   x2 = (-7357 * p)>>16;
@@ -500,7 +498,7 @@ char bmp085Read(unsigned char registeraddress)
   Wire.requestFrom(Baddress, 1);
   while(!Wire.available())
     ;
-    
+
   return Wire.read();
 }
 
@@ -532,7 +530,7 @@ unsigned int bmp085ReadUT()
   // Write 0x2E into Register 0xF4
   // This requests a temperature reading
   writeTo(Baddress, 0xF4, 0x2E);
- 
+
   // Wait at least 4.5ms
   delay(5);
   
