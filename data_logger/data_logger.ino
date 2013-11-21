@@ -88,6 +88,11 @@ void setup() //setup instructions
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
 
+  if(accelerometer.testConnection()) myFile.println("Accelerometer connected!");
+  if(compass.testConnection()) myFile.println("Compass connected!");
+  if(gyro.testConnection()) myFile.println("Gyro connected!");
+  if(barometer.testConnection()) myFile.println("Barometer connected!");
+
   // TODO: compass.initialize();
   compass.setMode(HMC5883L_MODE_CONTINUOUS);
 
@@ -141,7 +146,7 @@ void setup() //setup instructions
   GzOff = GzCal/50;
 
   //print column headers
-  myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure");
+  myFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
 
   if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
 
@@ -189,29 +194,29 @@ void loop() {
 
     //print data to file on SD card, using commas to seperate
     myFile.print(time*0.000001);
-    myFile.print(",   ");
+    myFile.print("\t");
     myFile.print(time_for_loop*1000);
-    myFile.print(",   ");
+    myFile.print("\t");
     myFile.print(Accx);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(Accy);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(Accz);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(w[0]);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(w[1]);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(w[2]);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(Mx);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(My);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(Mz);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.print(temperature);
-    myFile.print(",    ");
+    myFile.print("\t");
     myFile.println(pressure);
 
     a = 1;
