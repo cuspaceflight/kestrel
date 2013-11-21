@@ -3,7 +3,7 @@
 #include <math.h> //Maths Library
 #include <SD.h> //SD library
 #include <Servo.h> //servo library
-#include "./../data_logger/MatrixMath2.h" //matrix library
+#include "../libraries/MatrixMath/MatrixMath.h" //matrix library
 
 
 //Sensor addresses
@@ -115,6 +115,312 @@ float Der = 0;
 float r_max = 9.5; //to be determined
 float previous_Heading = 0;
 float previous_r = 0;
+
+
+//This function will write a value to a register on a sensors.
+//Parameters:
+//  device: The I2C address of the sensor.
+//  registerAddress: The address of the register on the sensor that should be written to.
+//  data: The value to be written to the specified register.
+void writeTo(int device, byte registerAddress, byte data)
+{
+  //Initiate a communication sequence with the desired i2c device
+  Wire.beginTransmission(device);
+  //Tell the I2C address which register we are writing to
+  Wire.write(registerAddress);
+  //Send the value to write to the specified register
+  Wire.write(data);
+  //End the communication sequence
+  Wire.endTransmission();
+}
+
+//This function will read the data from a specified register and return the value.
+//Parameters:
+//  device: The I2C address of the sensor.
+//  registerAddress: The address of the register on the sensor that should be read
+//Return:
+//  unsigned char: The value currently residing in the specified register
+unsigned char readFrom(int device, byte registerAddress)
+{
+  //This variable will hold the contents read from the i2c device.
+  unsigned char data = 0;
+
+  //Send the register address to be read.
+  Wire.beginTransmission(device);
+  //Send the Register Address
+  Wire.write(registerAddress);
+  //End the communication sequence.
+  Wire.endTransmission();
+
+  //Ask the I2C device for data
+  Wire.beginTransmission(device);
+  Wire.requestFrom(device, 1);
+
+  //Wait for a response from the I2C device
+  if(Wire.available()){
+    //Save the data sent from the I2C device
+    data = Wire.read();
+  }
+
+  //End the communication sequence.
+  Wire.endTransmission();
+
+  //Return the data read during the operation
+  return data;
+}
+
+//This function is used to read the X-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
+//NOTE: This value is NOT in degrees per second.
+//Usage: int xRate = readX();
+int readGX(void)
+{
+  int data = 0;
+  data = readFrom(Gaddress, GYRO_XOUT_H)<<8;
+  data |= readFrom(Gaddress, GYRO_XOUT_L);
+
+  return data;
+}
+
+//This function is used to read the Y-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
+//NOTE: This value is NOT in degrees per second.
+//Usage: int yRate = readY();
+int readGY(void)
+{
+  int data = 0;
+  data = readFrom(Gaddress, GYRO_YOUT_H)<<8;
+  data |= readFrom(Gaddress, GYRO_YOUT_L);
+
+  return data;
+}
+
+//This function is used to read the Z-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
+//NOTE: This value is NOT in degrees per second.
+//Usage: int zRate = readZ();
+int readGZ(void)
+{
+  int data = 0;
+  data = readFrom(Gaddress, GYRO_ZOUT_H)<<8;
+  data |= readFrom(Gaddress, GYRO_ZOUT_L);
+
+  return data;
+}
+
+//This function is used to read the X-Axis value of the accelerometer.
+//NOTE: This value is NOT in SI units.
+//Usage:
+int readAX(void)
+{
+  int data = 0;
+  data = readFrom(Aaddress, 0x33)<<8;
+  data |= readFrom(Aaddress, 0x32);
+
+  return data;
+}
+
+//This function is used to read the Y-Axis value of the accelerometer.
+//NOTE: This value is NOT in SI units.
+//Usage:
+int readAY(void)
+{
+  int data = 0;
+  data = readFrom(Aaddress, 0x35)<<8;
+  data |= readFrom(Aaddress, 0x34);
+
+  return data;
+}
+
+//This function is used to read the Z-Axis value of the accelerometer.
+//NOTE: This value is NOT in SI units.
+//Usage:
+int readAZ(void)
+{
+  int data = 0;
+  data = readFrom(Aaddress, 0x37)<<8;
+  data |= readFrom(Aaddress, 0x36);
+
+  return data;
+}
+
+// Read 1 byte from the BMP085 at 'address'
+char bmp085Read(unsigned char registeraddress)
+{
+  unsigned char data;
+
+  Wire.beginTransmission(Baddress);
+  Wire.write(registeraddress);
+  Wire.endTransmission();
+
+  Wire.requestFrom(Baddress, 1);
+  while(!Wire.available())
+    ;
+
+  return Wire.read();
+}
+
+// Read 2 bytes from the BMP085
+// First byte will be from 'address'
+// Second byte will be from 'address'+1
+int bmp085ReadInt(unsigned char registeraddress)
+{
+  unsigned char msb, lsb;
+
+  Wire.beginTransmission(Baddress);
+  Wire.write(registeraddress);
+  Wire.endTransmission();
+
+  Wire.requestFrom(Baddress, 2);
+  while(Wire.available()<2)
+    ;
+  msb = Wire.read();
+  lsb = Wire.read();
+
+  return (int) msb<<8 | lsb;
+}
+
+// Stores all of the bmp085's calibration values into global variables
+// Calibration values are required to calculate temp and pressure
+// This function should be called at the beginning of the program
+void bmp085Calibration()
+{
+  ac1 = bmp085ReadInt(0xAA);
+  ac2 = bmp085ReadInt(0xAC);
+  ac3 = bmp085ReadInt(0xAE);
+  ac4 = bmp085ReadInt(0xB0);
+  ac5 = bmp085ReadInt(0xB2);
+  ac6 = bmp085ReadInt(0xB4);
+  b1 = bmp085ReadInt(0xB6);
+  b2 = bmp085ReadInt(0xB8);
+  mb = bmp085ReadInt(0xBA);
+  mc = bmp085ReadInt(0xBC);
+  md = bmp085ReadInt(0xBE);
+}
+
+// Calculate temperature given ut.
+// Value returned will be in units of 0.1 deg C
+short bmp085GetTemperature(unsigned int ut)
+{
+  long x1, x2;
+
+  x1 = (((long)ut - (long)ac6)*(long)ac5) >> 15;
+  x2 = ((long)mc << 11)/(x1 + md);
+  b5 = x1 + x2;
+
+  return ((b5 + 8)>>4);
+}
+
+// Calculate pressure given up
+// calibration values must be known
+// b5 is also required so bmp085GetTemperature(...) must be called first.
+// Value returned will be pressure in units of Pa.
+long bmp085GetPressure(unsigned long up)
+{
+  long x1, x2, x3, b3, b6, p;
+  unsigned long b4, b7;
+
+  b6 = b5 - 4000;
+  // Calculate B3
+  x1 = (b2 * (b6 * b6)>>12)>>11;
+  x2 = (ac2 * b6)>>11;
+  x3 = x1 + x2;
+  b3 = (((((long)ac1)*4 + x3)<<OSS) + 2)>>2;
+
+  // Calculate B4
+  x1 = (ac3 * b6)>>13;
+  x2 = (b1 * ((b6 * b6)>>12))>>16;
+  x3 = ((x1 + x2) + 2)>>2;
+  b4 = (ac4 * (unsigned long)(x3 + 32768))>>15;
+
+  b7 = ((unsigned long)(up - b3) * (50000>>OSS));
+  if (b7 < 0x80000000)
+    p = (b7<<1)/b4;
+  else
+    p = (b7/b4)<<1;
+
+  x1 = (p>>8) * (p>>8);
+  x1 = (x1 * 3038)>>16;
+  x2 = (-7357 * p)>>16;
+  p += (x1 + x2 + 3791)>>4;
+
+  return p;
+}
+
+// Read the uncompensated temperature value
+unsigned int bmp085ReadUT()
+{
+  unsigned int ut;
+
+  // Write 0x2E into Register 0xF4
+  // This requests a temperature reading
+  writeTo(Baddress, 0xF4, 0x2E);
+
+  // Wait at least 4.5ms
+  delay(5);
+
+  // Read two bytes from registers 0xF6 and 0xF7
+  ut = bmp085ReadInt(0xF6);
+  return ut;
+}
+
+// Read the uncompensated pressure value
+unsigned long bmp085ReadUP()
+{
+  unsigned char msb, lsb, xlsb;
+  unsigned long up = 0;
+
+  // Write 0x34+(OSS<<6) into register 0xF4
+  // Request a pressure reading w/ oversampling setting
+  writeTo(Baddress, 0xF4, (0x34 + (OSS<<6)));
+
+  // Wait for conversion, delay time dependent on OSS
+  delay(2 + (3<<OSS));
+
+  // Read register 0xF6 (MSB), 0xF7 (LSB), and 0xF8 (XLSB)
+  Wire.beginTransmission(Baddress);
+  Wire.write(0xF6);
+  Wire.endTransmission();
+  Wire.requestFrom(Baddress, 3);
+
+  // Wait for data to become available
+  while(Wire.available() < 3)
+    ;
+  msb = Wire.read();
+  lsb = Wire.read();
+  xlsb = Wire.read();
+
+  up = (((unsigned long) msb << 16) | ((unsigned long) lsb << 8) | (unsigned long) xlsb) >> (8-OSS);
+
+  return up;
+}
+
+//This function is used to read the magnetometer in the X direction.
+int readMX(void)
+{
+  int data = 0;
+  data = readFrom(Maddress, 0x03)<<8; //0x03 is MSB register
+  data |= readFrom(Maddress, 0x04);  //LSB register
+
+  return data;
+}
+
+//This function is used to read the magnetometer in the Y direction.
+int readMY(void)
+{
+  int data = 0;
+  data = readFrom(Maddress, 0x07)<<8; //0x07 is MSB register
+  data |= readFrom(Maddress, 0x08);  //LSB register
+
+  return data;
+}
+
+//This function is used to read the magnetometer in the Z direction.
+int readMZ(void)
+{
+  int data = 0;
+  data = readFrom(Maddress, 0x05)<<8; //0x03 is MSB register
+  data |= readFrom(Maddress, 0x06);  //LSB register
+
+  return data;
+}
 
 
 void setup() //setup instructions
@@ -294,309 +600,3 @@ void loop() {
 
   time_for_loop = (micros()-time)*0.000001; //time taken from start of loop
 }
-
-//This function will write a value to a register on a sensors.
-//Parameters:
-//  device: The I2C address of the sensor.
-//  registerAddress: The address of the register on the sensor that should be written to.
-//  data: The value to be written to the specified register.
-void writeTo(int device, byte registerAddress, byte data)
-{
-  //Initiate a communication sequence with the desired i2c device
-  Wire.beginTransmission(device);
-  //Tell the I2C address which register we are writing to
-  Wire.write(registerAddress);
-  //Send the value to write to the specified register
-  Wire.write(data);
-  //End the communication sequence
-  Wire.endTransmission();
-}
-
-//This function will read the data from a specified register and return the value.
-//Parameters:
-//  device: The I2C address of the sensor.
-//  registerAddress: The address of the register on the sensor that should be read
-//Return:
-//  unsigned char: The value currently residing in the specified register
-unsigned char readFrom(int device, byte registerAddress)
-{
-  //This variable will hold the contents read from the i2c device.
-  unsigned char data = 0;
-
-  //Send the register address to be read.
-  Wire.beginTransmission(device);
-  //Send the Register Address
-  Wire.write(registerAddress);
-  //End the communication sequence.
-  Wire.endTransmission();
-
-  //Ask the I2C device for data
-  Wire.beginTransmission(device);
-  Wire.requestFrom(device, 1);
-
-  //Wait for a response from the I2C device
-  if(Wire.available()){
-    //Save the data sent from the I2C device
-    data = Wire.read();
-  }
-
-  //End the communication sequence.
-  Wire.endTransmission();
-
-  //Return the data read during the operation
-  return data;
-}
-
-//This function is used to read the X-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
-//NOTE: This value is NOT in degrees per second.
-//Usage: int xRate = readX();
-int readGX(void)
-{
-  int data = 0;
-  data = readFrom(Gaddress, GYRO_XOUT_H)<<8;
-  data |= readFrom(Gaddress, GYRO_XOUT_L);
-
-  return data;
-}
-
-//This function is used to read the Y-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
-//NOTE: This value is NOT in degrees per second.
-//Usage: int yRate = readY();
-int readGY(void)
-{
-  int data = 0;
-  data = readFrom(Gaddress, GYRO_YOUT_H)<<8;
-  data |= readFrom(Gaddress, GYRO_YOUT_L);
-
-  return data;
-}
-
-//This function is used to read the Z-Axis rate of the gyroscope. The function returns the ADC value from the Gyroscope
-//NOTE: This value is NOT in degrees per second.
-//Usage: int zRate = readZ();
-int readGZ(void)
-{
-  int data = 0;
-  data = readFrom(Gaddress, GYRO_ZOUT_H)<<8;
-  data |= readFrom(Gaddress, GYRO_ZOUT_L);
-
-  return data;
-}
-
-//This function is used to read the X-Axis value of the accelerometer.
-//NOTE: This value is NOT in SI units.
-//Usage:
-int readAX(void)
-{
-  int data = 0;
-  data = readFrom(Aaddress, 0x33)<<8;
-  data |= readFrom(Aaddress, 0x32);
-
-  return data;
-}
-
-//This function is used to read the Y-Axis value of the accelerometer.
-//NOTE: This value is NOT in SI units.
-//Usage:
-int readAY(void)
-{
-  int data = 0;
-  data = readFrom(Aaddress, 0x35)<<8;
-  data |= readFrom(Aaddress, 0x34);
-
-  return data;
-}
-
-//This function is used to read the Z-Axis value of the accelerometer.
-//NOTE: This value is NOT in SI units.
-//Usage:
-int readAZ(void)
-{
-  int data = 0;
-  data = readFrom(Aaddress, 0x37)<<8;
-  data |= readFrom(Aaddress, 0x36);
-
-  return data;
-}
-
-// Stores all of the bmp085's calibration values into global variables
-// Calibration values are required to calculate temp and pressure
-// This function should be called at the beginning of the program
-void bmp085Calibration()
-{
-  ac1 = bmp085ReadInt(0xAA);
-  ac2 = bmp085ReadInt(0xAC);
-  ac3 = bmp085ReadInt(0xAE);
-  ac4 = bmp085ReadInt(0xB0);
-  ac5 = bmp085ReadInt(0xB2);
-  ac6 = bmp085ReadInt(0xB4);
-  b1 = bmp085ReadInt(0xB6);
-  b2 = bmp085ReadInt(0xB8);
-  mb = bmp085ReadInt(0xBA);
-  mc = bmp085ReadInt(0xBC);
-  md = bmp085ReadInt(0xBE);
-}
-
-// Calculate temperature given ut.
-// Value returned will be in units of 0.1 deg C
-short bmp085GetTemperature(unsigned int ut)
-{
-  long x1, x2;
-
-  x1 = (((long)ut - (long)ac6)*(long)ac5) >> 15;
-  x2 = ((long)mc << 11)/(x1 + md);
-  b5 = x1 + x2;
-
-  return ((b5 + 8)>>4);
-}
-
-// Calculate pressure given up
-// calibration values must be known
-// b5 is also required so bmp085GetTemperature(...) must be called first.
-// Value returned will be pressure in units of Pa.
-long bmp085GetPressure(unsigned long up)
-{
-  long x1, x2, x3, b3, b6, p;
-  unsigned long b4, b7;
-
-  b6 = b5 - 4000;
-  // Calculate B3
-  x1 = (b2 * (b6 * b6)>>12)>>11;
-  x2 = (ac2 * b6)>>11;
-  x3 = x1 + x2;
-  b3 = (((((long)ac1)*4 + x3)<<OSS) + 2)>>2;
-
-  // Calculate B4
-  x1 = (ac3 * b6)>>13;
-  x2 = (b1 * ((b6 * b6)>>12))>>16;
-  x3 = ((x1 + x2) + 2)>>2;
-  b4 = (ac4 * (unsigned long)(x3 + 32768))>>15;
-
-  b7 = ((unsigned long)(up - b3) * (50000>>OSS));
-  if (b7 < 0x80000000)
-    p = (b7<<1)/b4;
-  else
-    p = (b7/b4)<<1;
-
-  x1 = (p>>8) * (p>>8);
-  x1 = (x1 * 3038)>>16;
-  x2 = (-7357 * p)>>16;
-  p += (x1 + x2 + 3791)>>4;
-
-  return p;
-}
-
-// Read 1 byte from the BMP085 at 'address'
-char bmp085Read(unsigned char registeraddress)
-{
-  unsigned char data;
-
-  Wire.beginTransmission(Baddress);
-  Wire.write(registeraddress);
-  Wire.endTransmission();
-
-  Wire.requestFrom(Baddress, 1);
-  while(!Wire.available())
-    ;
-
-  return Wire.read();
-}
-
-// Read 2 bytes from the BMP085
-// First byte will be from 'address'
-// Second byte will be from 'address'+1
-int bmp085ReadInt(unsigned char registeraddress)
-{
-  unsigned char msb, lsb;
-
-  Wire.beginTransmission(Baddress);
-  Wire.write(registeraddress);
-  Wire.endTransmission();
-
-  Wire.requestFrom(Baddress, 2);
-  while(Wire.available()<2)
-    ;
-  msb = Wire.read();
-  lsb = Wire.read();
-
-  return (int) msb<<8 | lsb;
-}
-
-// Read the uncompensated temperature value
-unsigned int bmp085ReadUT()
-{
-  unsigned int ut;
-
-  // Write 0x2E into Register 0xF4
-  // This requests a temperature reading
-  writeTo(Baddress, 0xF4, 0x2E);
-
-  // Wait at least 4.5ms
-  delay(5);
-
-  // Read two bytes from registers 0xF6 and 0xF7
-  ut = bmp085ReadInt(0xF6);
-  return ut;
-}
-
-// Read the uncompensated pressure value
-unsigned long bmp085ReadUP()
-{
-  unsigned char msb, lsb, xlsb;
-  unsigned long up = 0;
-
-  // Write 0x34+(OSS<<6) into register 0xF4
-  // Request a pressure reading w/ oversampling setting
-  writeTo(Baddress, 0xF4, (0x34 + (OSS<<6)));
-
-  // Wait for conversion, delay time dependent on OSS
-  delay(2 + (3<<OSS));
-
-  // Read register 0xF6 (MSB), 0xF7 (LSB), and 0xF8 (XLSB)
-  Wire.beginTransmission(Baddress);
-  Wire.write(0xF6);
-  Wire.endTransmission();
-  Wire.requestFrom(Baddress, 3);
-
-  // Wait for data to become available
-  while(Wire.available() < 3)
-    ;
-  msb = Wire.read();
-  lsb = Wire.read();
-  xlsb = Wire.read();
-
-  up = (((unsigned long) msb << 16) | ((unsigned long) lsb << 8) | (unsigned long) xlsb) >> (8-OSS);
-
-  return up;
-}
-
-//This function is used to read the magnetometer in the X direction.
-int readMX(void)
-{
-  int data = 0;
-  data = readFrom(Maddress, 0x03)<<8; //0x03 is MSB register
-  data |= readFrom(Maddress, 0x04);  //LSB register
-
-  return data;
-}
-
-//This function is used to read the magnetometer in the Y direction.
-int readMY(void)
-{
-  int data = 0;
-  data = readFrom(Maddress, 0x07)<<8; //0x07 is MSB register
-  data |= readFrom(Maddress, 0x08);  //LSB register
-
-  return data;
-}
-
-//This function is used to read the magnetometer in the Z direction.
-int readMZ(void)
-{
-  int data = 0;
-  data = readFrom(Maddress, 0x05)<<8; //0x03 is MSB register
-  data |= readFrom(Maddress, 0x06);  //LSB register
-
-  return data;
-}
-
