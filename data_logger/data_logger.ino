@@ -20,10 +20,8 @@ ITG3200 gyro;
 //Global variables
 File myFile; //holds information on file ebing written to on SD card
 
-int i = 1, n = 0, a = 0, b = 0; //used in for and if statements
-int Ax, Ay, Az; //triple axis data for accelormeter
-int led1Pin = 8;  // green LED is connected to pin 8
-int led2Pin = 7;  // red LED is connected to pin 8
+const int led1Pin = 8;  // green LED is connected to pin 8
+const int led2Pin = 7;  // red LED is connected to pin 8
 
 unsigned long time = 0, start_time = 0, record_time = 0; //long variables for dealing with time
 
@@ -115,7 +113,7 @@ void setup() {
   {
     float AxCal = 0, AyCal = 0, AzCal = 0;
     //find average values at rest
-    for (i = 0; i<25; i++) {
+    for (int i = 0; i<25; i++) {
       //Read the x,y and z output rates from the accelerometer.
       AxCal = AxCal + accelerometer.getAccelerationX();
       AyCal = AyCal - accelerometer.getAccelerationY(); //make upwards positive
@@ -132,7 +130,7 @@ void setup() {
     //Gyro Calibration
   int GxCal = 0, GyCal = 0, GzCal = 0;
 
-  for (i = 0; i<50; i++) {
+  for (int i = 0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
     GxCal = GxCal + gyro.getRotationX();
     GyCal = GyCal + gyro.getRotationY();
@@ -151,7 +149,7 @@ void setup() {
 
 }
 
-
+bool hasLaunched = false;
 
 void loop() {
   time = micros(); //time at start of loop, in micro seconds
@@ -164,15 +162,16 @@ void loop() {
 
 
   //Accelerometer Read data from each axis, 2 registers per axis
-  Ax = accelerometer.getAccelerationX();
+  int Ax = accelerometer.getAccelerationX();
   Accx = Ax*Asensitivity -accel_center_x; //convert to SI units and zero
-  Ay = - accelerometer.getAccelerationY(); //make upwards positive
+  int Ay = - accelerometer.getAccelerationY(); //make upwards positive
   Accy = Ay*Asensitivity-accel_center_y;
-  Az = accelerometer.getAccelerationZ();
+  int Az = accelerometer.getAccelerationZ();
   Accz = Az*Asensitivity-accel_center_z;
   Mag_acc = sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
 
-  if(Mag_acc<20 && a == 0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
+  if(Mag_acc<20 && !hasLaunched) {
+    //if the rocket hasn't experienced an accleration over 30 m/s^2, it hasn't yet lacunhed
     // Serial.println("Low acceleration mode");
   }
   else {
@@ -218,19 +217,17 @@ void loop() {
     myFile.print("\t");
     myFile.println(pressure);
 
-    a = 1;
-  }
-
-  //if statement sets start time when data starts to be recorded
-  if (a == 1 and b == 0) {
-    start_time = micros();
-    b = 1;
+    if(!hasLaunched) {
+      // first high-acceleration pass - we just launched
+      hasLaunched = 1;
+      start_time = micros();
+    }
   }
 
   record_time = micros() - start_time; //time spent recording data can be calculated
 
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
-  if(micros()>2E9 or (record_time > 30E6 and a == 1)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+  if(micros() > 2E9 || (record_time > 30E6 && hasLaunched)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     myFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
     servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
