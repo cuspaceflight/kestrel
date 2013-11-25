@@ -180,7 +180,11 @@ void loop() {
     compass.getHeading(&Mx, &My, &Mz);
 
     //read pressure sensor
+    barometer.setControl(BMP085_MODE_TEMPERATURE);
+    delayMicroseconds(barometer.getMeasureDelayMicroseconds());
     float temperature = barometer.getTemperatureC(); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
+    barometer.setControl(BMP085_MODE_PRESSURE_0);
+    delayMicroseconds(barometer.getMeasureDelayMicroseconds());
     float pressure = barometer.getPressure(); // read pressure from barometer, and convert to Pa
 
     //print data to file on SD card, using commas to seperate
