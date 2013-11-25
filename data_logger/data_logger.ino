@@ -28,9 +28,9 @@ int led2Pin = 7;  // red LED is connected to pin 8
 unsigned long time = 0, start_time = 0, record_time = 0; //long variables for dealing with time
 
 float time_for_loop = 0; //time for a loop
-float Gsensitivity = 14.375; //convert to degrees per second, times by correct factor according to range.
+float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
+float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
 float GxOff, GyOff, GzOff; //gyro offset values
-float Asensitivity = 3.262; //Senstivity LMB/m/s^2, 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
 float Accx, Accy, Accz, Mag_acc; //variables for acceleration in m/s^2
 float accel_angle_x, accel_angle_y; //tilt angles from accelerometer
 float accel_center_x = 0, accel_center_y = 0, accel_center_z = 0; //alternative offsets for accelerometer which are used in the software, these seem better
@@ -70,10 +70,9 @@ float previous_Heading = 0;
 float previous_r = 0;
 
 
-void setup() //setup instructions
-{
+void setup() {
 
-  Gsensitivity = Gsensitivity * 180 / M_PI; //convert degrees per second to radians per second, note gyro output gets divided by this value
+  Gsensitivity = Gsensitivity * M_PI / 180; //convert degrees per second to radians per second
 
   //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
 
@@ -125,9 +124,9 @@ void setup() //setup instructions
     }
 
     //Alternatvie accelerometer calibration
-    accel_center_x = (AxCal/25)/Asensitivity; //in g then in mg
-    accel_center_y = (AyCal/25)/Asensitivity + 9.81; //account for gravity
-    accel_center_z = (AzCal/25)/Asensitivity;
+    accel_center_x = (AxCal/25)*Asensitivity; //in g then in mg
+    accel_center_y = (AyCal/25)*Asensitivity + 9.81; //account for gravity
+    accel_center_z = (AzCal/25)*Asensitivity;
   }
 
     //Gyro Calibration
@@ -159,18 +158,18 @@ void loop() {
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = -(1.000*gyro.getRotationX() - GxOff)/Gsensitivity;
-  w[1] = (1.000*gyro.getRotationY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
-  w[2] = (1.000*gyro.getRotationZ() - GzOff)/Gsensitivity;
+  w[0] = -(1.000*gyro.getRotationX() - GxOff)*Gsensitivity;
+  w[1] = (1.000*gyro.getRotationY() - GyOff)*Gsensitivity; // gyro appears to use left hand coordinate system
+  w[2] = (1.000*gyro.getRotationZ() - GzOff)*Gsensitivity;
 
 
   //Accelerometer Read data from each axis, 2 registers per axis
   Ax = accelerometer.getAccelerationX();
-  Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
+  Accx = Ax*Asensitivity -accel_center_x; //convert to SI units and zero
   Ay = - accelerometer.getAccelerationY(); //make upwards positive
-  Accy = Ay/Asensitivity-accel_center_y;
+  Accy = Ay*Asensitivity-accel_center_y;
   Az = accelerometer.getAccelerationZ();
-  Accz = Az/Asensitivity-accel_center_z;
+  Accz = Az*Asensitivity-accel_center_z;
   Mag_acc = sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
 
   if(Mag_acc<20 && a == 0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
