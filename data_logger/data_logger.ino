@@ -24,8 +24,6 @@ File dataFile;
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
 
-unsigned long time = 0, start_time = 0, record_time = 0; //long variables for dealing with time
-
 float time_for_loop = 0; //time for a loop
 float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
 float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
@@ -160,8 +158,16 @@ void setup() {
 }
 
 bool hasLaunched = false;
+uint32_t launch_time;
+
+uint32_t barometer_ready_time = 0;
+bool barometer_is_temperature = false;
+
+
 
 void loop() {
+  uint32_t loop_start = micros();
+
   // Wait for a request for data
   if(Serial.available()) {
     digitalWrite(redLedPin, HIGH);
@@ -171,7 +177,6 @@ void loop() {
     while(1);
   }
 
-  time = micros(); //time at start of loop, in micro seconds
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
@@ -201,17 +206,24 @@ void loop() {
     int16_t Mx, My, Mz;
     compass.getHeading(&Mx, &My, &Mz);
 
-    //read pressure sensor
-    barometer.setControl(BMP085_MODE_TEMPERATURE);
-    delayMicroseconds(barometer.getMeasureDelayMicroseconds());
-    float temperature = barometer.getTemperatureC(); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
-    barometer.setControl(BMP085_MODE_PRESSURE_0);
-    delayMicroseconds(barometer.getMeasureDelayMicroseconds());
-    float pressure = barometer.getPressure(); // read pressure from barometer, and convert to Pa
-
+    float temperature = NAN;
+    float pressure = NAN;
+    if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
+      if(barometer_is_temperature) {
+        temperature = barometer.getTemperatureC();
+        barometer.setControl(BMP085_MODE_PRESSURE_0);
+        barometer_is_temperature = false;
+      }
+      else {
+        pressure = barometer.getPressure();
+        barometer.setControl(BMP085_MODE_TEMPERATURE);
+        barometer_is_temperature = true;
+      }
+      barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
+    }
     //print data to file on SD card, using commas to seperate
     float data[] = {
-      time*0.000001,
+      loop_start*0.000001,
       time_for_loop*1000,
       Accx,
       Accy,
@@ -231,14 +243,14 @@ void loop() {
     if(!hasLaunched) {
       // first high-acceleration pass - we just launched
       hasLaunched = 1;
-      start_time = micros();
+      launch_time = loop_start;
     }
   }
 
-  record_time = micros() - start_time; //time spent recording data can be calculated
+  uint32_t record_time = loop_start - launch_time; //time spent recording data can be calculated
 
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
-  if(micros() > 2E9 || (record_time > 30E6 && hasLaunched)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+  if(loop_start > 2E9 || (record_time > 30E6 && hasLaunched)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     dataFile.close();
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
@@ -251,5 +263,7 @@ void loop() {
     delay(100000000); //is there a way to break out of the loop
   }
 
-  time_for_loop = (micros()-time)*0.000001; //time taken from start of loop
+  uint32_t loop_end = micros();
+
+  time_for_loop = (loop_end - loop_start)/1e6;
 }
