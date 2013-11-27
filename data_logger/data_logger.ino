@@ -20,8 +20,8 @@ ITG3200 gyro;
 //Global variables
 File myFile; //holds information on file ebing written to on SD card
 
-const int led1Pin = 8;  // green LED is connected to pin 8
-const int led2Pin = 7;  // red LED is connected to pin 8
+const int greenLedPin = 8;  // green LED is connected to pin 8
+const int redLedPin = 7;  // red LED is connected to pin 8
 
 unsigned long time = 0, start_time = 0, record_time = 0; //long variables for dealing with time
 
@@ -175,7 +175,7 @@ void loop() {
     // Serial.println("Low acceleration mode");
   }
   else {
-    digitalWrite(led2Pin, HIGH ); //turn red led on
+    digitalWrite(redLedPin, HIGH ); //turn red led on
     //Serial.println("High acceleration mode");
 
     //read magnetometer
@@ -232,8 +232,10 @@ void loop() {
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
     servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
     servo_3.write(pos3);              // tell servo to go to position in variable 'pos'
-    digitalWrite(led1Pin, LOW);    // turn LED off
-    digitalWrite(led2Pin, LOW);    // turn LED off
+    digitalWrite(greenLedPin, LOW);    // turn LED off
+    digitalWrite(redLedPin, LOW);    // turn LED off
+
+
     delay(100000000); //is there a way to break out of the loop
   }
 
