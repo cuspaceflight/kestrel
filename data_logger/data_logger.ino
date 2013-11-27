@@ -18,7 +18,8 @@ ADXL345 accelerometer;
 ITG3200 gyro;
 
 //Global variables
-File myFile; //holds information on file ebing written to on SD card
+File textFile; //holds information on file ebing written to on SD card
+File dataFile;
 
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
@@ -67,28 +68,37 @@ float r_max = 9.5; //to be determined
 float previous_Heading = 0;
 float previous_r = 0;
 
+void sendDataBack() {
+  dataFile.seek(0);
+  while (dataFile.available()) {
+    Serial.write(dataFile.read());
+  }
+}
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("Starting");
 
   Gsensitivity = Gsensitivity * M_PI / 180; //convert degrees per second to radians per second
 
   //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
 
   pinMode(10, OUTPUT); //set SD CS pin to output
-  pinMode(led1Pin, OUTPUT); // Set the LED 1 pin as output
-  pinMode(led2Pin, OUTPUT); // Set the LED 2 pin as output
+  pinMode(greenLedPin, OUTPUT); // Set the LED 1 pin as output
+  pinMode(redLedPin, OUTPUT); // Set the LED 2 pin as output
 
   SD.begin(); //begin SDness
 
-  myFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
+  textFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
+  dataFile = SD.open("log.dat", FILE_WRITE);
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
 
-  if(accelerometer.testConnection()) myFile.println("Accelerometer connected!");
-  if(compass.testConnection()) myFile.println("Compass connected!");
-  if(gyro.testConnection()) myFile.println("Gyro connected!");
-  if(barometer.testConnection()) myFile.println("Barometer connected!");
+  if(accelerometer.testConnection()) textFile.println("Accelerometer connected!");
+  if(compass.testConnection()) textFile.println("Compass connected!");
+  if(gyro.testConnection()) textFile.println("Gyro connected!");
+  if(barometer.testConnection()) textFile.println("Barometer connected!");
 
   // TODO: compass.initialize();
   compass.setMode(HMC5883L_MODE_CONTINUOUS);
@@ -143,15 +153,24 @@ void setup() {
   GzOff = GzCal/50;
 
   //print column headers
-  myFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
+  textFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
 
-  if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
+  if(textFile) digitalWrite(greenLedPin, HIGH );   // turn LED on if file has been created successfully
 
 }
 
 bool hasLaunched = false;
 
 void loop() {
+  // Wait for a request for data
+  if(Serial.available()) {
+    digitalWrite(redLedPin, HIGH);
+    digitalWrite(greenLedPin, LOW);
+    sendDataBack();
+    digitalWrite(redLedPin, LOW);
+    while(1);
+  }
+
   time = micros(); //time at start of loop, in micro seconds
 
   //Read the x,y and z output rates from the gyroscope.
@@ -191,31 +210,23 @@ void loop() {
     float pressure = barometer.getPressure(); // read pressure from barometer, and convert to Pa
 
     //print data to file on SD card, using commas to seperate
-    myFile.print(time*0.000001);
-    myFile.print("\t");
-    myFile.print(time_for_loop*1000);
-    myFile.print("\t");
-    myFile.print(Accx);
-    myFile.print("\t");
-    myFile.print(Accy);
-    myFile.print("\t");
-    myFile.print(Accz);
-    myFile.print("\t");
-    myFile.print(w[0]);
-    myFile.print("\t");
-    myFile.print(w[1]);
-    myFile.print("\t");
-    myFile.print(w[2]);
-    myFile.print("\t");
-    myFile.print(Mx);
-    myFile.print("\t");
-    myFile.print(My);
-    myFile.print("\t");
-    myFile.print(Mz);
-    myFile.print("\t");
-    myFile.print(temperature);
-    myFile.print("\t");
-    myFile.println(pressure);
+    float data[] = {
+      time*0.000001,
+      time_for_loop*1000,
+      Accx,
+      Accy,
+      Accz,
+      w[0],
+      w[1],
+      w[2],
+      Mx,
+      My,
+      Mz,
+      temperature,
+      pressure
+    };
+
+    dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));
 
     if(!hasLaunched) {
       // first high-acceleration pass - we just launched
@@ -228,7 +239,8 @@ void loop() {
 
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
   if(micros() > 2E9 || (record_time > 30E6 && hasLaunched)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-    myFile.close(); //close and save SD file, otherwise precious data will be lost
+    dataFile.close();
+    textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
     servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
     servo_3.write(pos3);              // tell servo to go to position in variable 'pos'
