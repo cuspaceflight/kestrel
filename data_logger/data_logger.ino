@@ -112,6 +112,8 @@ void setup() {
   if(compass.testConnection()) textFile.println("Compass connected!");
   if(gyro.testConnection()) textFile.println("Gyro connected!");
   if(barometer.testConnection()) textFile.println("Barometer connected!");
+  textFile.print("data file is ");
+  textFile.print(filename);
 
   // TODO: compass.initialize();
   compass.setMode(HMC5883L_MODE_CONTINUOUS);
@@ -119,7 +121,7 @@ void setup() {
   barometer.initialize(); //calibrate Barometer
 
   //configure the gyro
-  gyro.setFullScaleRange(ITG3200_FULLSCALE_2000); // unofficially 1000°/sec, only ITG3200_FULLSCALE_2000 is documented
+  gyro.setFullScaleRange(ITG3200_FULLSCALE_2000); //only ITG3200_FULLSCALE_2000 is documented
   gyro.setDLPFBandwidth(ITG3200_DLPF_BW_98);
   gyro.setRate(9); // = 100Hz - I think the time for a sample should match the loop time
 
@@ -128,7 +130,7 @@ void setup() {
   accelerometer.setRange(ADXL345_RANGE_16G);
   accelerometer.setRate(ADXL345_RATE_100); //Hz
   accelerometer.setMeasureEnabled(true);
-  accelerometer.setOffset(5, 5, 5);  //for some strange reason setting these to 0 gave more false readings
+  accelerometer.setOffset(0, 0, 0);  //for some strange reason setting these to 0 gave more false readings
 
   delay(1000); //make sure everything is static
 
@@ -148,14 +150,6 @@ bool barometer_is_temperature = false;
 void loop() {
   uint32_t loop_start = micros();
 
-  // Wait for a request for data
-  if(Serial.available()) {
-    digitalWrite(redLedPin, HIGH);
-    digitalWrite(greenLedPin, LOW);
-    sendDataBack();
-    digitalWrite(redLedPin, LOW);
-    while(1);
-  }
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
@@ -209,7 +203,7 @@ void loop() {
   uint32_t record_time = loop_start - launch_time; //time spent recording data can be calculated
 
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
-  if(record_time > 30E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+  if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     dataFile.close();
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
@@ -218,11 +212,17 @@ void loop() {
     digitalWrite(greenLedPin, LOW);    // turn LED off
     digitalWrite(redLedPin, LOW);    // turn LED off
 
-
     delay(100000000); //is there a way to break out of the loop
   }
 
   uint32_t loop_end = micros();
+  time_for_loop = (loop_end - loop_start);
+  while(time_for_loop < 10E3) { //make the loop time 10ms
+  loop_end = micros();
+  time_for_loop = (loop_end - loop_start);
+  delayMicroseconds(10);
+  }
 
+  loop_end = micros();
   time_for_loop = (loop_end - loop_start);
 }
