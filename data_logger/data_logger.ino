@@ -89,13 +89,13 @@ void setup() {
 
   SD.begin(); //begin SDness
 
-  textFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
+  textFile = SD.open("Log_text.txt", FILE_WRITE); //create file on SD card
 
   // create a new file 
   char filename[] = "LOG00.dat"; 
   for (uint8_t i = 0; i < 100; i++) { 
-    filename[4] = i/10 + '0'; 
-    filename[5] = i%10 + '0'; 
+    filename[3] = i/10 + '0'; 
+    filename[4] = i%10 + '0'; 
     if (! SD.exists(filename)) { 
       // only open a new file if it doesn't exist 
       dataFile = SD.open(filename, FILE_WRITE); 
@@ -103,6 +103,7 @@ void setup() {
       } 
     }
 
+    if(dataFile) digitalWrite(redLedPin, HIGH );   // turn LED on if file has been created successfully
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
@@ -140,11 +141,8 @@ void setup() {
 }
 
 bool hasLaunched = false;
-
-
 uint32_t barometer_ready_time = 0;
 bool barometer_is_temperature = false;
-
 
 
 void loop() {
@@ -164,7 +162,6 @@ void loop() {
   w[0] = -1.0*gyro.getRotationX();
   w[1] = 1.0*gyro.getRotationY(); // gyro appears to use left hand coordinate system
   w[2] = 1.0*gyro.getRotationZ();
-
 
   //Accelerometer Read data from each axis, 2 registers per axis
   int Ax = accelerometer.getAccelerationX(); 
@@ -212,7 +209,7 @@ void loop() {
   uint32_t record_time = loop_start - launch_time; //time spent recording data can be calculated
 
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
-  if(record_time > 30E6)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+  if(record_time > 30E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     dataFile.close();
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
