@@ -18,19 +18,16 @@ ADXL345 accelerometer;
 ITG3200 gyro;
 
 //Global variables
-File myFile; //holds information on file ebing written to on SD card
+File textFile; //holds information on file ebing written to on SD card
+File dataFile;
 
-int i = 1, n = 0, a = 0, b = 0; //used in for and if statements
-int Ax, Ay, Az; //triple axis data for accelormeter
-int led1Pin = 8;  // green LED is connected to pin 8
-int led2Pin = 7;  // red LED is connected to pin 8
-
-unsigned long time = 0, start_time = 0, record_time = 0; //long variables for dealing with time
+const int greenLedPin = 8;  // green LED is connected to pin 8
+const int redLedPin = 7;  // red LED is connected to pin 8
 
 float time_for_loop = 0; //time for a loop
-float Gsensitivity = 14.375; //convert to degrees per second, times by correct factor according to range.
+float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
+float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
 float GxOff, GyOff, GzOff; //gyro offset values
-float Asensitivity = 3.262; //Senstivity LMB/m/s^2, 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
 float Accx, Accy, Accz, Mag_acc; //variables for acceleration in m/s^2
 float accel_angle_x, accel_angle_y; //tilt angles from accelerometer
 float accel_center_x = 0, accel_center_y = 0, accel_center_z = 0; //alternative offsets for accelerometer which are used in the software, these seem better
@@ -69,24 +66,37 @@ float r_max = 9.5; //to be determined
 float previous_Heading = 0;
 float previous_r = 0;
 
+void sendDataBack() {
+  dataFile.seek(0);
+  while (dataFile.available()) {
+    Serial.write(dataFile.read());
+  }
+}
 
-void setup() //setup instructions
-{
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Starting");
 
-  Gsensitivity = Gsensitivity * 180 / M_PI; //convert degrees per second to radians per second, note gyro output gets divided by this value
+  Gsensitivity = Gsensitivity * M_PI / 180; //convert degrees per second to radians per second
 
   //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
 
   pinMode(10, OUTPUT); //set SD CS pin to output
-  pinMode(led1Pin, OUTPUT); // Set the LED 1 pin as output
-  pinMode(led2Pin, OUTPUT); // Set the LED 2 pin as output
+  pinMode(greenLedPin, OUTPUT); // Set the LED 1 pin as output
+  pinMode(redLedPin, OUTPUT); // Set the LED 2 pin as output
 
   SD.begin(); //begin SDness
 
-  myFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
+  textFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
+  dataFile = SD.open("log.dat", FILE_WRITE);
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
+
+  if(accelerometer.testConnection()) textFile.println("Accelerometer connected!");
+  if(compass.testConnection()) textFile.println("Compass connected!");
+  if(gyro.testConnection()) textFile.println("Gyro connected!");
+  if(barometer.testConnection()) textFile.println("Barometer connected!");
 
   // TODO: compass.initialize();
   compass.setMode(HMC5883L_MODE_CONTINUOUS);
@@ -111,7 +121,7 @@ void setup() //setup instructions
   {
     float AxCal = 0, AyCal = 0, AzCal = 0;
     //find average values at rest
-    for (i = 0; i<25; i++) {
+    for (int i = 0; i<25; i++) {
       //Read the x,y and z output rates from the accelerometer.
       AxCal = AxCal + accelerometer.getAccelerationX();
       AyCal = AyCal - accelerometer.getAccelerationY(); //make upwards positive
@@ -120,15 +130,15 @@ void setup() //setup instructions
     }
 
     //Alternatvie accelerometer calibration
-    accel_center_x = (AxCal/25)/Asensitivity; //in g then in mg
-    accel_center_y = (AyCal/25)/Asensitivity + 9.81; //account for gravity
-    accel_center_z = (AzCal/25)/Asensitivity;
+    accel_center_x = (AxCal/25)*Asensitivity; //in g then in mg
+    accel_center_y = (AyCal/25)*Asensitivity + 9.81; //account for gravity
+    accel_center_z = (AzCal/25)*Asensitivity;
   }
 
     //Gyro Calibration
   int GxCal = 0, GyCal = 0, GzCal = 0;
 
-  for (i = 0; i<50; i++) {
+  for (int i = 0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
     GxCal = GxCal + gyro.getRotationX();
     GyCal = GyCal + gyro.getRotationY();
@@ -141,100 +151,119 @@ void setup() //setup instructions
   GzOff = GzCal/50;
 
   //print column headers
-  myFile.println("Time, Time for loop in ms, Acc x, Acc y, Acc z, Gx Rate, Gy Rate, GzRate,  Mx,   My,   Mz, Temp, Pressure");
+  textFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
 
-  if(myFile) digitalWrite(led1Pin, HIGH );   // turn LED on if file has been created successfully
+  if(textFile) digitalWrite(greenLedPin, HIGH );   // turn LED on if file has been created successfully
 
 }
+
+bool hasLaunched = false;
+uint32_t launch_time;
+
+uint32_t barometer_ready_time = 0;
+bool barometer_is_temperature = false;
 
 
 
 void loop() {
-  time = micros(); //time at start of loop, in micro seconds
+  uint32_t loop_start = micros();
+
+  // Wait for a request for data
+  if(Serial.available()) {
+    digitalWrite(redLedPin, HIGH);
+    digitalWrite(greenLedPin, LOW);
+    sendDataBack();
+    digitalWrite(redLedPin, LOW);
+    while(1);
+  }
+
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = -(1.000*gyro.getRotationX() - GxOff)/Gsensitivity;
-  w[1] = (1.000*gyro.getRotationY() - GyOff)/Gsensitivity; // gyro appears to use left hand coordinate system
-  w[2] = (1.000*gyro.getRotationZ() - GzOff)/Gsensitivity;
+  w[0] = -(1.000*gyro.getRotationX() - GxOff)*Gsensitivity;
+  w[1] = (1.000*gyro.getRotationY() - GyOff)*Gsensitivity; // gyro appears to use left hand coordinate system
+  w[2] = (1.000*gyro.getRotationZ() - GzOff)*Gsensitivity;
 
 
   //Accelerometer Read data from each axis, 2 registers per axis
-  Ax = accelerometer.getAccelerationX();
-  Accx = Ax/Asensitivity -accel_center_x; //convert to SI units and zero
-  Ay = - accelerometer.getAccelerationY(); //make upwards positive
-  Accy = Ay/Asensitivity-accel_center_y;
-  Az = accelerometer.getAccelerationZ();
-  Accz = Az/Asensitivity-accel_center_z;
+  int Ax = accelerometer.getAccelerationX();
+  Accx = Ax*Asensitivity -accel_center_x; //convert to SI units and zero
+  int Ay = - accelerometer.getAccelerationY(); //make upwards positive
+  Accy = Ay*Asensitivity-accel_center_y;
+  int Az = accelerometer.getAccelerationZ();
+  Accz = Az*Asensitivity-accel_center_z;
   Mag_acc = sqrt(Accx*Accx+Accy*Accy+Accz*Accz); //calucate the magnitude
 
-  if(Mag_acc<20 && a == 0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
+  if(Mag_acc<20 && !hasLaunched) {
+    //if the rocket hasn't experienced an accleration over 30 m/s^2, it hasn't yet lacunhed
     // Serial.println("Low acceleration mode");
   }
   else {
-    digitalWrite(led2Pin, HIGH ); //turn red led on
+    digitalWrite(redLedPin, HIGH ); //turn red led on
     //Serial.println("High acceleration mode");
 
     //read magnetometer
     int16_t Mx, My, Mz;
     compass.getHeading(&Mx, &My, &Mz);
 
-    //read pressure sensor
-    barometer.setControl(BMP085_MODE_TEMPERATURE);
-    delayMicroseconds(barometer.getMeasureDelayMicroseconds());
-    float temperature = barometer.getTemperatureC(); //read temperature from the barometer which has a temp sesnors, and convert to degrees*10
-    barometer.setControl(BMP085_MODE_PRESSURE_0);
-    delayMicroseconds(barometer.getMeasureDelayMicroseconds());
-    float pressure = barometer.getPressure(); // read pressure from barometer, and convert to Pa
-
+    float temperature = NAN;
+    float pressure = NAN;
+    if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
+      if(barometer_is_temperature) {
+        temperature = barometer.getTemperatureC();
+        barometer.setControl(BMP085_MODE_PRESSURE_0);
+        barometer_is_temperature = false;
+      }
+      else {
+        pressure = barometer.getPressure();
+        barometer.setControl(BMP085_MODE_TEMPERATURE);
+        barometer_is_temperature = true;
+      }
+      barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
+    }
     //print data to file on SD card, using commas to seperate
-    myFile.print(time*0.000001);
-    myFile.print(",   ");
-    myFile.print(time_for_loop*1000);
-    myFile.print(",   ");
-    myFile.print(Accx);
-    myFile.print(",    ");
-    myFile.print(Accy);
-    myFile.print(",    ");
-    myFile.print(Accz);
-    myFile.print(",    ");
-    myFile.print(w[0]);
-    myFile.print(",    ");
-    myFile.print(w[1]);
-    myFile.print(",    ");
-    myFile.print(w[2]);
-    myFile.print(",    ");
-    myFile.print(Mx);
-    myFile.print(",    ");
-    myFile.print(My);
-    myFile.print(",    ");
-    myFile.print(Mz);
-    myFile.print(",    ");
-    myFile.print(temperature);
-    myFile.print(",    ");
-    myFile.println(pressure);
+    float data[] = {
+      loop_start*0.000001,
+      time_for_loop*1000,
+      Accx,
+      Accy,
+      Accz,
+      w[0],
+      w[1],
+      w[2],
+      Mx,
+      My,
+      Mz,
+      temperature,
+      pressure
+    };
 
-    a = 1;
+    dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));
+
+    if(!hasLaunched) {
+      // first high-acceleration pass - we just launched
+      hasLaunched = 1;
+      launch_time = loop_start;
+    }
   }
 
-  //if statement sets start time when data starts to be recorded
-  if (a == 1 and b == 0) {
-    start_time = micros();
-    b = 1;
-  }
-
-  record_time = micros() - start_time; //time spent recording data can be calculated
+  uint32_t record_time = loop_start - launch_time; //time spent recording data can be calculated
 
   //if statement to stop the loop after 60 minutes or after 60 seconds of recording
-  if(micros()>2E9 or (record_time > 30E6 and a == 1)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-    myFile.close(); //close and save SD file, otherwise precious data will be lost
+  if(loop_start > 2E9 || (record_time > 30E6 && hasLaunched)) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+    dataFile.close();
+    textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
     servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
     servo_3.write(pos3);              // tell servo to go to position in variable 'pos'
-    digitalWrite(led1Pin, LOW);    // turn LED off
-    digitalWrite(led2Pin, LOW);    // turn LED off
+    digitalWrite(greenLedPin, LOW);    // turn LED off
+    digitalWrite(redLedPin, LOW);    // turn LED off
+
+
     delay(100000000); //is there a way to break out of the loop
   }
 
-  time_for_loop = (micros()-time)*0.000001; //time taken from start of loop
+  uint32_t loop_end = micros();
+
+  time_for_loop = (loop_end - loop_start)/1e6;
 }
