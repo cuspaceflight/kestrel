@@ -88,7 +88,19 @@ void setup() {
   SD.begin(); //begin SDness
 
   textFile = SD.open("Log_All.txt", FILE_WRITE); //create file on SD card
-  dataFile = SD.open("log.dat", FILE_WRITE);
+
+  // create a new file 
+  char filename[] = "LOG00.dat"; 
+  for (uint8_t i = 0; i < 100; i++) { 
+    filename[4] = i/10 + '0'; 
+    filename[5] = i%10 + '0'; 
+    if (! SD.exists(filename)) { 
+      // only open a new file if it doesn't exist 
+      dataFile = SD.open(filename, FILE_WRITE); 
+      break; // leave the loop! 
+      } 
+    }
+
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
@@ -103,8 +115,8 @@ void setup() {
 
   barometer.initialize(); //calibrate Barometer
 
-  //configure tehe gyro
-  gyro.setFullScaleRange(2); // unofficially 1000°/sec, only ITG3200_FULLSCALE_2000 is documented
+  //configure the gyro
+  gyro.setFullScaleRange(ITG3200_FULLSCALE_2000); // unofficially 1000°/sec, only ITG3200_FULLSCALE_2000 is documented
   gyro.setDLPFBandwidth(ITG3200_DLPF_BW_98);
   gyro.setRate(9); // = 100Hz - I think the time for a sample should match the loop time
 
