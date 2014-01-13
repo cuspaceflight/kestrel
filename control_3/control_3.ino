@@ -322,9 +322,9 @@ void loop()
       temp3=(2*s_c + 2*link - 1.0/(2*horn) - sqrt(sq(1.0/(2*horn) - 2*link - 2*s_c) - 4*(sq(s_c) + 2*link*s_c)*(1 + 1/(8*pow(horn,3)))))/(2*(1 + 1/(8*pow(horn,3))));
       
       // convert into servo degrees 180/M_PI = 57
-      s1 = 57*asin(temp1/horn) + pos1;
-      s2 = 57*asin(temp2/horn) + pos2;
-      s3 = 57*asin(temp3/horn) + pos3;
+      s1 = 57*asin(s_a/horn) + pos1;
+      s2 = 57*asin(s_b/horn) + pos2;
+      s3 = 57*asin(s_c/horn) + pos3;
       
     //update servos with new positions
     servo_1.write(s1);              
