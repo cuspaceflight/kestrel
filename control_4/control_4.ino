@@ -138,7 +138,7 @@ void setup() {
      //Gyro Calibration
   int GxCal=0, GyCal=0, GzCal=0; 
   
-  for (i=0; i<50; i++) {
+  for (uint8_t i=0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
     GxCal = GxCal + readGX();
     GyCal = GyCal + readGY();
