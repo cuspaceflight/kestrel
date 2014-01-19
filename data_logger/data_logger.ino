@@ -6,16 +6,8 @@
 #include <MatrixMath.h> //matrix library
 
 //I2C devices from https://github.com/jrowberg/i2cdevlib
-#include <I2Cdev.h>
-#include <BMP085.h>
-#include <HMC5883L.h>
-#include <ITG3200.h>
-#include <ADXL345.h>
-
-BMP085 barometer;
-HMC5883L compass;
-ADXL345 accelerometer;
-ITG3200 gyro;
+#include <Sensors.h>
+Sensors s;
 
 //Global variables
 File textFile; //holds information on file ebing written to on SD card
@@ -100,38 +92,19 @@ void setup() {
       // only open a new file if it doesn't exist 
       dataFile = SD.open(filename, FILE_WRITE); 
       break; // leave the loop! 
-      } 
-    }
+    } 
+  }
 
-    if(dataFile) digitalWrite(redLedPin, HIGH );   // turn LED on if file has been created successfully
+  if(dataFile) digitalWrite(redLedPin, HIGH );   // turn LED on if file has been created successfully
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
 
-  if(accelerometer.testConnection()) textFile.println("Accelerometer connected!");
-  if(compass.testConnection()) textFile.println("Compass connected!");
-  if(gyro.testConnection()) textFile.println("Gyro connected!");
-  if(barometer.testConnection()) textFile.println("Barometer connected!");
+  s.logConnections(textFile);
   textFile.print("data file is ");
   textFile.print(filename);
 
-  // TODO: compass.initialize();
-  compass.setMode(HMC5883L_MODE_CONTINUOUS);
-
-  barometer.initialize(); //calibrate Barometer
-
-  //configure the gyro
-  gyro.setFullScaleRange(ITG3200_FULLSCALE_2000); //only ITG3200_FULLSCALE_2000 is documented
-  gyro.setDLPFBandwidth(ITG3200_DLPF_BW_98);
-  gyro.setRate(9); // = 100Hz - I think the time for a sample should match the loop time
-
-  // configure accelerometer
-  accelerometer.initialize();
-  accelerometer.setRange(ADXL345_RANGE_16G);
-  accelerometer.setRate(ADXL345_RATE_100); //Hz
-  accelerometer.setMeasureEnabled(true);
-  accelerometer.setOffset(0, 0, 0);  //for some strange reason setting these to 0 gave more false readings
-
+  s.initialize();
   delay(1000); //make sure everything is static
 
   //print column headers
@@ -153,33 +126,33 @@ void loop() {
 
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = -1.0*gyro.getRotationX();
-  w[1] = 1.0*gyro.getRotationY(); // gyro appears to use left hand coordinate system
-  w[2] = 1.0*gyro.getRotationZ();
+  w[0] = -1.0*s.gyro.getRotationX();
+  w[1] = 1.0*s.gyro.getRotationY(); // gyro appears to use left hand coordinate system
+  w[2] = 1.0*s.gyro.getRotationZ();
 
   //Accelerometer Read data from each axis, 2 registers per axis
-  int Ax = accelerometer.getAccelerationX(); 
-  int Ay = - accelerometer.getAccelerationY(); //make upwards positive
-  int Az = accelerometer.getAccelerationZ();
+  int Ax = s.accelerometer.getAccelerationX(); 
+  int Ay = - s.accelerometer.getAccelerationY(); //make upwards positive
+  int Az = s.accelerometer.getAccelerationZ();
 
   //read magnetometer
   int16_t Mx, My, Mz;
-  compass.getHeading(&Mx, &My, &Mz);
+  s.compass.getHeading(&Mx, &My, &Mz);
 
   float temperature = NAN;
   float pressure = NAN;
   if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
     if(barometer_is_temperature) {
-      temperature = barometer.getTemperatureC();
-      barometer.setControl(BMP085_MODE_PRESSURE_0);
+      temperature = s.barometer.getTemperatureC();
+      s.barometer.setControl(BMP085_MODE_PRESSURE_0);
       barometer_is_temperature = false;
     }
     else {
-      pressure = barometer.getPressure();
-      barometer.setControl(BMP085_MODE_TEMPERATURE);
+      pressure = s.barometer.getPressure();
+      s.barometer.setControl(BMP085_MODE_TEMPERATURE);
       barometer_is_temperature = true;
     }
-    barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
+    barometer_ready_time = micros() + s.barometer.getMeasureDelayMicroseconds();
   }
   //print data to file on SD card, using commas to seperate
   float data[] = {
