@@ -6,39 +6,66 @@
 #include <HMC5883L.h>
 #include <ITG3200.h>
 #include <ADXL345.h>
+#include <SD.h>
+
+template<typename T>
+struct vector3 {
+	T x; 
+	T y;
+	T z;
+
+	inline vector3<T> operator+(const vector3<T>& v) const {
+		return (vector3<T>){x + v.x, y + v.y, z + v.z};
+	}
+	inline vector3<T>& operator+=(const vector3<T>& v) {
+		x += v.x; y += v.y; z += v.z; return *this;
+	}
+
+	inline vector3<T> operator-(const vector3<T>& v) const {
+		return (vector3<T>){x - v.x, y - v.y, z - v.z};
+	}
+	inline vector3<T>& operator-=(const vector3<T>& v) {
+		x -= v.x; y -= v.y; z -= v.z; return *this;
+	}
+
+	inline vector3<T> operator/(T k) {
+		return (vector3<T>){x / k, y / k, z / k};
+	}
+	inline vector3<T> operator*(T k) {
+		return (vector3<T>){x * k, y * k, z * k};
+	}
+
+	template<typename U>
+	inline operator vector3<U>() {
+		return (vector3<U>){(U) x, (U) y, (U) z};
+	}
+};
+
+struct rocket_vector3f {
+	float front; // out from switch
+	float right; // with switch facing forward
+	float up;    // towards nose cone
+};
 
 class Sensors {
+private:
+	vector3<int16_t> gyroOffset;
+	float gyroSensitivity; // deg.s^-1 / LSB
 public:
 	BMP085 barometer;
 	HMC5883L compass;
 	ADXL345 accelerometer;
 	ITG3200 gyro;
 
-	void logConnections(File& f) {
-		if(accelerometer.testConnection()) f.println("Accelerometer connected!");
-		if(compass.testConnection()) f.println("Compass connected!");
-		if(gyro.testConnection()) f.println("Gyro connected!");
-		if(barometer.testConnection()) f.println("Barometer connected!");
+	Sensors() {
+		gyroOffset = (vector3<float>){0, 0, 0};
+		gyroSensitivity  = 1 / 14.375;
 	}
 
-	void initialize() {
-		// TODO: compass.initialize();
-		compass.setMode(HMC5883L_MODE_CONTINUOUS);
-
-		barometer.initialize(); //calibrate Barometer
-
-		//configure the gyro
-		gyro.setFullScaleRange(ITG3200_FULLSCALE_2000); //only ITG3200_FULLSCALE_2000 is documented
-		gyro.setDLPFBandwidth(ITG3200_DLPF_BW_98);
-		gyro.setRate(9); // = 100Hz - I think the time for a sample should match the loop time
-
-		// configure accelerometer
-		accelerometer.initialize();
-		accelerometer.setRange(ADXL345_RANGE_16G);
-		accelerometer.setRate(ADXL345_RATE_100); //Hz
-		accelerometer.setMeasureEnabled(true);
-		accelerometer.setOffset(0, 0, 0);  //for some strange reason setting these to 0 gave more false readings
-	}
+	void logConnections(File& f);
+	void initialize();
+	void calibrate();
+	vector3<float> getAngularVelocity();
 };
 
 #endif
