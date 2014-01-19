@@ -225,9 +225,9 @@ if ARDUINO_BOARD == "leonardo":
     cFlags += ["-DUSB_VID="+getBoardConf('build.vid')]
     cFlags += ["-DUSB_PID="+getBoardConf('build.pid')]
 
-envArduino = Environment(CC = AVR_BIN_PREFIX + 'gcc',
-                         CXX = AVR_BIN_PREFIX + 'g++',
-                         AS = AVR_BIN_PREFIX + 'gcc',
+envArduino = Environment(CC = File(AVR_BIN_PREFIX + 'gcc'),
+                         CXX = File(AVR_BIN_PREFIX + 'g++'),
+                         AS = File(AVR_BIN_PREFIX + 'gcc'),
                          CPPPATH = ['build/core'],
                          CPPDEFINES = {'F_CPU': F_CPU, 'ARDUINO': ARDUINO_VER},
                          CFLAGS = cFlags + ['-std=gnu99'],
@@ -323,9 +323,9 @@ def fnPrintInfo(target, source, env):
 
 bldProcessing = Builder(action = fnProcessing) #, suffix = '.cpp', src_suffix = sketchExt)
 bldCompressCore = Builder(action = fnCompressCore)
-bldELF = Builder(action = AVR_BIN_PREFIX + 'gcc -mmcu=%s ' % MCU +
-                          '-Os -Wl,--gc-sections -lm %s -o $TARGET $SOURCES -lc' % ' '.join(extra_cflags))
-bldHEX = Builder(action = AVR_BIN_PREFIX + 'objcopy -O ihex -R .eeprom $SOURCES $TARGET')
+bldELF = Builder(action = [[AVR_BIN_PREFIX + 'gcc', '-mmcu=%s' % MCU,
+                          '-Os', '-Wl,--gc-sections', '-lm'] + extra_cflags + ['-o', '$TARGET', '$SOURCES', '-lc']])
+bldHEX = Builder(action = [[AVR_BIN_PREFIX + 'objcopy', '-O', 'ihex', '-R', '.eeprom', '$SOURCES', '$TARGET']])
 bldInfo = Builder(action = fnPrintInfo)
 
 envArduino.Append(BUILDERS = {'Processing' : bldProcessing})
@@ -356,13 +356,8 @@ for line in open(TARGET + sketchExt):
     filename = result.group(1) + '.h'
     for libdir in ARDUINO_LIBS:
         for root, dirs, files in os.walk(libdir, followlinks=True):
-            if filename in files:
+            if filename in files and result.group(1) in root:
                 libCandidates.append(path.basename(root))
-
-# Hack. In version 20 of the Arduino IDE, the Ethernet library depends
-# implicitly on the SPI library.
-if ARDUINO_VER >= 20 and 'Ethernet' in libCandidates:
-    libCandidates.append('SPI')
 
 all_libs_sources = []
 for index, orig_lib_dir in enumerate(ARDUINO_LIBS):
@@ -429,16 +424,15 @@ if UPLOAD_PROTOCOL == 'stk500':
     UPLOAD_PROTOCOL = 'stk500v1'
 
 
-avrdudeOpts = ['-V', '-F', '-c %s' % UPLOAD_PROTOCOL, '-b %s' % UPLOAD_SPEED,
-               '-p %s' % MCU, '-P %s' % ARDUINO_PORT, '-U flash:w:$SOURCES']
+avrdudeOpts = ['-V', '-F', '-c', UPLOAD_PROTOCOL, '-b', UPLOAD_SPEED,
+               '-p', MCU, '-P', ARDUINO_PORT, '-U', 'flash:w:$SOURCES']
 if AVRDUDE_CONF:
-    avrdudeOpts.append('-C %s' % AVRDUDE_CONF)
+    avrdudeOpts += ['-C', AVRDUDE_CONF]
 
 if AVR_HOME_DUDE:
     AVR_BIN_PREFIX=AVR_HOME_DUDE
 
-fuse_cmd = '%s %s' % (path.join(path.dirname(AVR_BIN_PREFIX), 'avrdude'),
-                      ' '.join(avrdudeOpts))
+fuse_cmd = [path.join(path.dirname(AVR_BIN_PREFIX), 'avrdude')] + avrdudeOpts
 
 upload = envArduino.Alias('upload', TARGET + '.hex', [reset_cmd, fuse_cmd])
 AlwaysBuild(upload)
