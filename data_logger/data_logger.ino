@@ -3,7 +3,7 @@
 #include <math.h> //Maths Library
 #include <SD.h> //SD library
 #include <Servo.h> //servo library
-#include "../libraries/MatrixMath/MatrixMath.h" //matrix library
+#include <MatrixMath.h> //matrix library
 
 //I2C devices from https://github.com/jrowberg/i2cdevlib
 #include <I2Cdev.h>
