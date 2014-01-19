@@ -101,7 +101,18 @@ if platform == 'darwin':
                                       path.join(ARDUINO_HOME, 'hardware/tools/avr/bin'))
 elif platform == 'win32':
     # For Windows, use environment variables.
-    ARDUINO_HOME        = resolve_var('ARDUINO_HOME', None)
+    install_guess = None
+    for root in ["ProgramFiles", "ProgramFiles(x86)"]:
+        root = os.environ.get(root)
+        if root is None:
+            continue
+
+        p = path.join(root, 'Arduino')
+        if path.exists(p):
+            install_guess = p
+            break
+
+    ARDUINO_HOME        = resolve_var('ARDUINO_HOME', install_guess)
     ARDUINO_PORT        = resolve_var('ARDUINO_PORT', '')
     SKETCHBOOK_HOME     = resolve_var('SKETCHBOOK_HOME', '')
     if ARDUINO_HOME:
