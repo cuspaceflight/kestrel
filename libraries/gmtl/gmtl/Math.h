@@ -12,6 +12,8 @@
 #include <gmtl/Util/Assert.h>
 #include <gmtl/Util/StaticAssert.h>
 
+#include <stdint.h>
+
 namespace gmtl
 {
 
@@ -350,7 +352,7 @@ inline double sqrt( double fValue )
  */
 inline float fastInvSqrt(float x)
 {
-   GMTL_STATIC_ASSERT(sizeof(float) == sizeof(int),
+   GMTL_STATIC_ASSERT(sizeof(float) == sizeof(int32_t),
                       Union_type_sizes_do_not_match);
 
    // Use an approach to data type reinterpretation that is safe with GCC
@@ -360,7 +362,7 @@ inline float fastInvSqrt(float x)
    union
    {
       float float_value;
-      int   int_value;
+      int32_t   int_value;
    } data;
 
    const float xhalf(0.5f*x);
@@ -374,7 +376,7 @@ inline float fastInvSqrt(float x)
 
 inline float fastInvSqrt2(float x)
 {
-   GMTL_STATIC_ASSERT(sizeof(float) == sizeof(int),
+   GMTL_STATIC_ASSERT(sizeof(float) == sizeof(int32_t),
                       Union_type_sizes_do_not_match);
 
    // Use an approach to data type reinterpretation that is safe with GCC
@@ -384,7 +386,7 @@ inline float fastInvSqrt2(float x)
    union
    {
       float float_value;
-      int   int_value;
+      int32_t   int_value;
    } data;
 
    const float xhalf(0.5f*x);
@@ -399,7 +401,7 @@ inline float fastInvSqrt2(float x)
 
 inline float fastInvSqrt3(float x)
 {
-   GMTL_STATIC_ASSERT(sizeof(float) == sizeof(int),
+   GMTL_STATIC_ASSERT(sizeof(float) == sizeof(int32_t),
                       Union_type_sizes_do_not_match);
 
    // Use an approach to data type reinterpretation that is safe with GCC
@@ -409,7 +411,7 @@ inline float fastInvSqrt3(float x)
    union
    {
       float float_value;
-      int   int_value;
+      int32_t   int_value;
    } data;
 
    const float xhalf(0.5f*x);
