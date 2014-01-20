@@ -8,7 +8,6 @@ env = Environment(
 )
 
 env.ConfigureBoard("uno")
-p = "$ARDUINO_HOME/hardware/tools/avr"
 env.Replace(
     AR = env.File("$AVR_BIN/avr-ar"),
     AS = env.File("$AVR_BIN/avr-gcc"),

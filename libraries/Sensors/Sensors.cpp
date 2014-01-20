@@ -29,12 +29,12 @@ void Sensors::initialize() {
 void Sensors::calibrate() {
 	const int n = 50;
 
-	gyroOffset = (vector3<float>){0, 0, 0};
+	gyroOffset = Vec<int16_t, 3>(0, 0, 0);
 
-	vector3<int16_t> sum = {0, 0, 0};
+	Vec<int16_t, 3> sum(0, 0, 0);
 	for (uint8_t i=0; i<n; i++) {
-		vector3<int16_t> temp;
-		gyro.getRotation(&temp.x, &temp.y, &temp.z);
+		Vec<int16_t, 3> temp;
+		gyro.getRotation(&temp[0], &temp[1], &temp[2]);
 		gyroOffset += temp;
 		delay(10);
 	}
@@ -45,10 +45,12 @@ void Sensors::calibrate() {
 	// TODO: calibrate accelerometer/record magnemometer?
 }
 
-vector3<float> Sensors::getAngularVelocity() {
-	vector3<int16_t> temp;
-	gyro.getRotation(&temp.x, &temp.y, &temp.z);
+Vec3f Sensors::getAngularVelocity() {
+	Vec<int16_t, 3> temp;
+	gyro.getRotation(&temp[0], &temp[1], &temp[2]);
 	temp -= gyroOffset;
 
-	return (vector3<float>) temp * gyroSensitivity;
+	Vec3f result(temp[0], temp[1], temp[2]);
+
+	return result * gyroSensitivity;
 }
