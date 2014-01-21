@@ -160,17 +160,17 @@ void loop() {
   }
   //print data to file on SD card, using commas to seperate
   float data[] = {
-    loop_start,
-    time_for_loop,
-    Ax,
-    Ay,
-    Az,
+    (float) loop_start,
+    (float) time_for_loop,
+    (float) Ax,
+    (float) Ay,
+    (float) Az,
     w[0],
     w[1],
     w[2],
-    Mx,
-    My,
-    Mz,
+    (float) Mx,
+    (float) My,
+    (float) Mz,
     temperature,
     pressure
   };
