@@ -2,25 +2,34 @@ import os
 
 env = Environment(
     tools=["gcc", "g++", "gas", 'gnulink', "arduino", "ar"],
-    ARDUINO_HOME = R"C:\Program Files (x86)\Arduino",
     AVR_BIN=R"$ARDUINO_HOME/hardware/tools/avr/bin",
     UPLOAD_PORT='COM3'
 )
+if env['PLATFORM'] == 'win32':
+    env.Replace(
+        ARDUINO_HOME = R"C:\Program Files (x86)\Arduino"
+    )
 
 env.ConfigureBoard("uno")
-env.Replace(
-    AR = env.File("$AVR_BIN/avr-ar"),
-    AS = env.File("$AVR_BIN/avr-gcc"),
-    CC = env.File("$AVR_BIN/avr-gcc"),
-    CXX = env.File("$AVR_BIN/avr-g++"),
-    OBJCOPY = env.File("$AVR_BIN/avr-objcopy"),
-    AVRDUDE = env.File("$AVR_BIN/avrdude"),
 
-    AVRCONFIGFILE = env.File('$ARDUINO_HOME/hardware/tools/avr/etc/avrdude.conf')
-)
+if env['PLATFORM'] == 'win32':
+    env.Replace(
+        AR = env.File("$AVR_BIN/avr-ar"),
+        AS = env.File("$AVR_BIN/avr-gcc"),
+        CC = env.File("$AVR_BIN/avr-gcc"),
+        CXX = env.File("$AVR_BIN/avr-g++"),
+        OBJCOPY = env.File("$AVR_BIN/avr-objcopy"),
+        AVRDUDE = env.File("$AVR_BIN/avrdude"),
+
+        AVRCONFIGFILE = env.File('$ARDUINO_HOME/hardware/tools/avr/etc/avrdude.conf')
+    )
+    env.Append(
+        CPPFLAGS = '--std=c++0x',
+        AVRDUDEFLAGS = '-C$AVRCONFIGFILE'
+    )
+
 env.Append(
-    CPPFLAGS = '--std=c++0x',
-    AVRDUDEFLAGS = '-C$AVRCONFIGFILE'
+    CPPFLAGS = '--std=c++0x'
 )
 
 core = env.ArduinoCore()
@@ -33,7 +42,7 @@ core_libs = [
 our_libs = [
     env.ArduinoLibrary("cpplib", '../libraries/StandardCplusplus'),
 
-    env.ArduinoLibrary("I2CDev", '../libraries/I2CDev'),
+    env.ArduinoLibrary("I2Cdev", '../libraries/I2Cdev'),
     env.ArduinoLibrary("ADXL345", '../libraries/ADXL345'),
     env.ArduinoLibrary("ITG3200", '../libraries/ITG3200'),
     env.ArduinoLibrary("BMP085", '../libraries/BMP085'),
