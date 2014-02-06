@@ -13,6 +13,8 @@
 #include <ITG3200.h>
 #include <ADXL345.h>
 
+#define BUF_LEN 100
+
 BMP085 barometer;
 HMC5883L compass;
 ADXL345 accelerometer;
@@ -21,11 +23,12 @@ ITG3200 gyro;
 //Global variables
 File textFile; //holds information on file ebing written to on SD card
 File dataFile;
+
 class data_buffer {
   public:
   float data[12];
 };
-data_buffer buffer[100]; //array to contain data
+data_buffer buffer[BUF_LEN]; //array to contain data
 int Nw=0, Nr=0;
 
 const int greenLedPin = 8;  // green LED is connected to pin 8
@@ -60,7 +63,6 @@ float d = 20, D = 48, horn = 12, link = 28; //geometric values
 
 // PID constants
 float Kp = 25, Ki = 2, Kd = 8;
-boolean launch=false; //switch to detect launch;
 
 //direction variables
 float w[3]; //angular velocity vector
@@ -174,9 +176,6 @@ void setup() {
   if(textFile) digitalWrite(greenLedPin, HIGH );   // turn LED on if file has been created successfully
   MsTimer2::set(10, PID); // 10ms period
   
-
-  launch_time = micros();
-  
   MsTimer2::start(); //start interupt such that function PID is called every 10ms
 }
 
@@ -217,109 +216,111 @@ void PID(){
   Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)/Asensitivity; //calucate the magnitude
 
   //If statement to detect launch
-  if(Mag_acc<15 and launch==false) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
+  if(Mag_acc<15 and hasLaunched==false) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
    // Serial.println("Low acceleration mode");
     //angles from gyro will drift slowly, these need to be kept constant while the sensor is stationary
     //so set them to 0 whilst on the ground 
   //set R1 = to indentity matrix
+    launch_time = micros();
   Matrix.Copy((float*) eye, 3, 3, (float*) R1);
   }
   else {
-    launch = true;
-  }
+    hasLaunched = true;
   
-  //Renormalization of R
-  Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
-  //a better implementation is below but in matlab code
-  /*xy_error=dot(R2(:,1),R2(:,2));
-  R3=zeros(3,3);
-  R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
-  R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
-  R3(:,3) = cross(R3(:,1),R3(:,2));
-  %make magnitudes equal to one, as the difference will be small can use
-  %taylor expansion to avoid square root
-  R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
-  R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
-  R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
-  */
-  
-  //use dot products to find pitch and yaw
-  Pitch = asin( Matrix.dot((float*)R1,(float*)J,3,3,3) ); //this gives the angle between the z axis and the horizontal plan (in which I and K reside) when no pitch is required this angle will be 0
-  Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
-  
-  //feed these into two PIDs
-  time_for_loop = 0.01;
-  if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
-  DerP = (Pitch - previous_Pitch)/ time_for_loop; // might want a low pass filter on here
-  previous_Pitch = Pitch;
-  rP = Kp * Pitch + Ki * IntegralP + Kd * DerP;
-  previous_rP = rP;
     
-  if (previous_r < r_max) IntegralY = IntegralY + Yaw * time_for_loop; //stop integral causing windup      
-  DerY = (Yaw - previous_Yaw)/ time_for_loop; // might want a low pass filter on here
-  previous_Yaw = Yaw;
-  rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
-  previous_rY = rY;
+    //Renormalization of R
+    Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
+    //a better implementation is below but in matlab code
+    /*xy_error=dot(R2(:,1),R2(:,2));
+    R3=zeros(3,3);
+    R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
+    R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
+    R3(:,3) = cross(R3(:,1),R3(:,2));
+    %make magnitudes equal to one, as the difference will be small can use
+    %taylor expansion to avoid square root
+    R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
+    R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
+    R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
+    */
+    
+    //use dot products to find pitch and yaw
+    Pitch = asin( Matrix.dot((float*)R1,(float*)J,3,3,3) ); //this gives the angle between the z axis and the horizontal plan (in which I and K reside) when no pitch is required this angle will be 0
+    Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
+    
+    //feed these into two PIDs
+    time_for_loop = 0.01;
+    if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
+    DerP = (Pitch - previous_Pitch)/ time_for_loop; // might want a low pass filter on here
+    previous_Pitch = Pitch;
+    rP = Kp * Pitch + Ki * IntegralP + Kd * DerP;
+    previous_rP = rP;
+      
+    if (previous_r < r_max) IntegralY = IntegralY + Yaw * time_for_loop; //stop integral causing windup      
+    DerY = (Yaw - previous_Yaw)/ time_for_loop; // might want a low pass filter on here
+    previous_Yaw = Yaw;
+    rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
+    previous_rY = rY;
+    
+    theta=atan2(rP,rY);
+    
+    r=sqrt(rP*rP+rY*rY);  
+    if (r > r_max) r = r_max;
+    previous_r = r;
+    
+    s_a = sqrt(sq(r*cos(theta) + d - D) + sq(r*sin(theta))); //angle in radians 
+    s_b = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) + d*0.866 - D*0.866)); //angle in radians 
+    s_c = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) - d*0.866 + D*0.866)); //angle in radians 
+    
+    s_a = s_a-link;
+    s_b = s_b-link;
+    s_c = s_c-link;
+    
+    // convert into servo degrees 180/M_PI = 57
+    s1 = 57*asin(s_a/horn) + pos1;
+    s2 = 57*asin(s_b/horn) + pos2;
+    s3 = 57*asin(s_c/horn) + pos3;
+    
+    //update servos with new positions
+    servo_1.write(s1);              
+    servo_2.write(s2);               
+    servo_3.write(s3);   
+    
+    //read magnetometer
+    int16_t Mx, My, Mz;
+    compass.getHeading(&Mx, &My, &Mz);
   
-  theta=atan2(rP,rY);
-  
-  r=sqrt(rP*rP+rY*rY);  
-  if (r > r_max) r = r_max;
-  previous_r = r;
-  
-  s_a = sqrt(sq(r*cos(theta) + d - D) + sq(r*sin(theta))); //angle in radians 
-  s_b = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) + d*0.866 - D*0.866)); //angle in radians 
-  s_c = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) - d*0.866 + D*0.866)); //angle in radians 
-  
-  s_a = s_a-link;
-  s_b = s_b-link;
-  s_c = s_c-link;
-  
-  // convert into servo degrees 180/M_PI = 57
-  s1 = 57*asin(s_a/horn) + pos1;
-  s2 = 57*asin(s_b/horn) + pos2;
-  s3 = 57*asin(s_c/horn) + pos3;
-  
-  //update servos with new positions
-  servo_1.write(s1);              
-  servo_2.write(s2);               
-  servo_3.write(s3);   
-  
-  //read magnetometer
-  int16_t Mx, My, Mz;
-  compass.getHeading(&Mx, &My, &Mz);
-
-  float temperature = NAN;
-  float pressure = NAN;
-  if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
-    if(barometer_is_temperature) {
-      temperature = barometer.getTemperatureC();
-      barometer.setControl(BMP085_MODE_PRESSURE_0);
-      barometer_is_temperature = false;
+    float temperature = NAN;
+    float pressure = NAN;
+    if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
+      if(barometer_is_temperature) {
+        temperature = barometer.getTemperatureC();
+        barometer.setControl(BMP085_MODE_PRESSURE_0);
+        barometer_is_temperature = false;
+      }
+      else {
+        pressure = barometer.getPressure();
+        barometer.setControl(BMP085_MODE_TEMPERATURE);
+        barometer_is_temperature = true;
+      }
+      barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
     }
-    else {
-      pressure = barometer.getPressure();
-      barometer.setControl(BMP085_MODE_TEMPERATURE);
-      barometer_is_temperature = true;
-    }
-    barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
+    
+    //store data from this loop
+    buffer[Nw].data[0] = micros();
+    buffer[Nw].data[1] =  Ax;
+    buffer[Nw].data[2] =  Ay;
+    buffer[Nw].data[3] =  Az;
+    buffer[Nw].data[4] =  w[0];
+    buffer[Nw].data[5] =  w[1];
+    buffer[Nw].data[6] =  w[2];
+    buffer[Nw].data[7] =  Mx;
+    buffer[Nw].data[8] =  My;
+    buffer[Nw].data[9] =  Mz;
+    buffer[Nw].data[10] =  temperature;
+    buffer[Nw].data[11] =  pressure;
+   Nw++;
+   if (Nw>BUF_LEN) Nw=0;
   }
-  
-  //store data from this loop
-  buffer[Nw].data[0] = micros();
-  buffer[Nw].data[1] =  Ax;
-  buffer[Nw].data[2] =  Ay;
-  buffer[Nw].data[3] =  Az;
-  buffer[Nw].data[4] =  w[0];
-  buffer[Nw].data[5] =  w[1];
-  buffer[Nw].data[6] =  w[2];
-  buffer[Nw].data[7] =  Mx;
-  buffer[Nw].data[8] =  My;
-  buffer[Nw].data[9] =  Mz;
-  buffer[Nw].data[10] =  temperature;
-  buffer[Nw].data[11] =  pressure;
- Nw++;
- if (Nw>100) Nw=0;
  
 }
 
@@ -331,7 +332,7 @@ void loop() {
    if (Nr<=Nw) { //need something to check the data write doesn't get ahead of the PID loop
    dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
    Nr++;
-   if (Nr>100) Nr=0; 
+   if (Nr>BUF_LEN) Nr=0; 
    }
   
   //if statement to stop the loop after 30 minutes
