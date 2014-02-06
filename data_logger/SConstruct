@@ -24,7 +24,6 @@ if env['PLATFORM'] == 'win32':
         AVRCONFIGFILE = env.File('$ARDUINO_HOME/hardware/tools/avr/etc/avrdude.conf')
     )
     env.Append(
-        CPPFLAGS = '--std=c++0x',
         AVRDUDEFLAGS = '-C$AVRCONFIGFILE'
     )
 

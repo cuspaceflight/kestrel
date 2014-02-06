@@ -3,7 +3,8 @@
 #include <math.h> //Maths Library
 #include <SD.h> //SD library
 #include <Servo.h> //servo library
-#include "../libraries/MatrixMath/MatrixMath.h" //matrix library
+#include <MatrixMath.h> //matrix library
+#include <MsTimer2.h> //library for time based interupts 
 
 //I2C devices from https://github.com/jrowberg/i2cdevlib
 #include <I2Cdev.h>
@@ -20,9 +21,16 @@ ITG3200 gyro;
 //Global variables
 File textFile; //holds information on file ebing written to on SD card
 File dataFile;
+class data_buffer {
+  public:
+  float data[12];
+};
+data_buffer buffer[100]; //array to contain data
+int Nw=0, Nr=0;
 
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
+//const int recoveryPin =; //pin attached to mosfet for deploying chute
 
 uint32_t time_for_loop = 0; //time for a loop
 uint32_t launch_time;
@@ -52,6 +60,7 @@ float d = 20, D = 48, horn = 12, link = 28; //geometric values
 
 // PID constants
 float Kp = 25, Ki = 2, Kd = 8;
+boolean launch=false; //switch to detect launch;
 
 //direction variables
 float w[3]; //angular velocity vector
@@ -63,11 +72,11 @@ float J[3] = {0, 1, 0}; //unit vector inertial system
 //int K[3][1] = { {0}, {0}, {1} }; //unit vector inertial system
 float Pitch = 0, Yaw = 0; // used to calculate gimbal movement
 float Heading; // angle between rocket vertical and inertial vertical
-float Integral = 0;
-float Der = 0;
+float IntegralP = 0, IntegralY=0;
+float DerP = 0, DerY=0;
 float r_max = 9.5; //to be determined
-float previous_Heading = 0;
-float previous_r = 0;
+float previous_Pitch = 0, previous_Yaw=0;
+float previous_rP = 0, previous_rY=0, previous_r=0;
 
 void sendDataBack() {
   dataFile.seek(0);
@@ -140,9 +149,9 @@ void setup() {
   
   for (uint8_t i=0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
-    GxCal = GxCal + readGX();
-    GyCal = GyCal + readGY();
-    GzCal = GzCal + readGZ();
+    GxCal = GxCal + gyro.getRotationX();
+    GyCal = GyCal + gyro.getRotationY();
+    GzCal = GzCal + gyro.getRotationZ();
     delay(10);
   }
   //use these to find gyro offsets
@@ -179,8 +188,8 @@ void PID(){
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
   w[0] = (-1.0*gyro.getRotationX()-GxOff)/Gsensitivity; // gyro appears to use left hand coordinate system
-  w[1] = (1.0*gyro.getRotationY()-Gyoff)/Gsensitivity; 
-  w[2] = (1.0*gyro.getRotationZ()-Gzoff)/Gsensitivity;
+  w[1] = (1.0*gyro.getRotationY()-GyOff)/Gsensitivity; 
+  w[2] = (1.0*gyro.getRotationZ()-GzOff)/Gsensitivity;
   
   //gyro angle, found by intergration 
   /* R1 is the previous rotation matrix which rotates the inertial 
@@ -205,15 +214,18 @@ void PID(){
   int Ax = accelerometer.getAccelerationX(); 
   int Ay = - accelerometer.getAccelerationY(); //make upwards positive
   int Az = accelerometer.getAccelerationZ();
-  Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)/Aseunsitivity; //calucate the magnitude
+  Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)/Asensitivity; //calucate the magnitude
 
   //If statement to detect launch
-  if(Mag_acc<15 and a==0) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
+  if(Mag_acc<15 and launch==false) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
    // Serial.println("Low acceleration mode");
     //angles from gyro will drift slowly, these need to be kept constant while the sensor is stationary
     //so set them to 0 whilst on the ground 
   //set R1 = to indentity matrix
   Matrix.Copy((float*) eye, 3, 3, (float*) R1);
+  }
+  else {
+    launch = true;
   }
   
   //Renormalization of R
@@ -251,9 +263,7 @@ void PID(){
   
   theta=atan2(rP,rY);
   
-  rp = abs(rp); //remove negative as the angle is set independently
-  ry=abs(ry);
-  r=rp+ry;  
+  r=sqrt(rP*rP+rY*rY);  
   if (r > r_max) r = r_max;
   previous_r = r;
   
@@ -296,33 +306,37 @@ void PID(){
   }
   
   //store data from this loop
-  float data[] = {
-    loop_start,
-    time_for_loop,
-    Ax,
-    Ay,
-    Az,
-    w[0],
-    w[1],
-    w[2],
-    Mx,
-    My,
-    Mz,
-    temperature,
-    pressure
- };
-
+  buffer[Nw].data[0] = micros();
+  buffer[Nw].data[1] =  Ax;
+  buffer[Nw].data[2] =  Ay;
+  buffer[Nw].data[3] =  Az;
+  buffer[Nw].data[4] =  w[0];
+  buffer[Nw].data[5] =  w[1];
+  buffer[Nw].data[6] =  w[2];
+  buffer[Nw].data[7] =  Mx;
+  buffer[Nw].data[8] =  My;
+  buffer[Nw].data[9] =  Mz;
+  buffer[Nw].data[10] =  temperature;
+  buffer[Nw].data[11] =  pressure;
+ Nw++;
+ if (Nw>100) Nw=0;
+ 
 }
 
 
 void loop() {
-  uint32_t loop_start = micros();
   
   //ring buffer to avoid data loss
+   //print data to file on SD card, using commas to seperate
+   if (Nr<=Nw) { //need something to check the data write doesn't get ahead of the PID loop
+   dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
+   Nr++;
+   if (Nr>100) Nr=0; 
+   }
   
   //if statement to stop the loop after 30 minutes
   if(micros() > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-    MsTimer2::end();
+    MsTimer2::stop();
     dataFile.close();
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
@@ -334,11 +348,11 @@ void loop() {
     delay(100000000); //is there a way to break out of the loop
   }
   
-  uint32_t record_time = loop_start - launch_time; //time spent recording data can be calculated
+  uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
   
   //if statement to stop the loop after motor burn has ended and deploy chute
   if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-    MsTimer2::end();
+    MsTimer2::stop();
     dataFile.close();
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
@@ -347,15 +361,14 @@ void loop() {
     digitalWrite(greenLedPin, LOW);    // turn LED off
     digitalWrite(redLedPin, LOW);    // turn LED off
     delay(1000); //wait a second
-    digitalWrite(recoveryPin, HIGH); //deploy chute
+   // digitalWrite(recoveryPin, HIGH); //deploy chute
     delay(3000); //wait 3 seconds
-    digitalWrite(recoveryPin, LOW); //turn off mosfet
+   // digitalWrite(recoveryPin, LOW); //turn off mosfet
 
     delay(100000000); //is there a way to break out of the loop
   }
 
-  //print data to file on SD card, using commas to seperate
-   dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));
+ 
 
   
 }
