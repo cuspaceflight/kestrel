@@ -33,7 +33,7 @@ int Nw=0, Nr=0;
 
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
-//const int recoveryPin =; //pin attached to mosfet for deploying chute
+const int recoveryPin =6; //pin attached to mosfet for deploying chute
 
 uint32_t time_for_loop = 0; //time for a loop
 uint32_t launch_time;
@@ -306,21 +306,29 @@ void PID(){
     }
     
     //store data from this loop
-    buffer[Nw].data[0] = micros();
-    buffer[Nw].data[1] =  Ax;
-    buffer[Nw].data[2] =  Ay;
-    buffer[Nw].data[3] =  Az;
-    buffer[Nw].data[4] =  w[0];
-    buffer[Nw].data[5] =  w[1];
-    buffer[Nw].data[6] =  w[2];
-    buffer[Nw].data[7] =  Mx;
-    buffer[Nw].data[8] =  My;
-    buffer[Nw].data[9] =  Mz;
-    buffer[Nw].data[10] =  temperature;
-    buffer[Nw].data[11] =  pressure;
-   Nw++;
-   if (Nw>BUF_LEN) Nw=0;
+    //check buffer isn't full
+    if (Nw < Nr || (Nw=BUF_LEN && Nr ==0) {
+      textFile.println("buffer exceeded");
+    }
+    else {      
+      buffer[Nw].data[0] = micros();
+      buffer[Nw].data[1] =  Ax;
+      buffer[Nw].data[2] =  Ay;
+      buffer[Nw].data[3] =  Az;
+      buffer[Nw].data[4] =  w[0];
+      buffer[Nw].data[5] =  w[1];
+      buffer[Nw].data[6] =  w[2];
+      buffer[Nw].data[7] =  Mx;
+      buffer[Nw].data[8] =  My;
+      buffer[Nw].data[9] =  Mz;
+      buffer[Nw].data[10] =  temperature;
+      buffer[Nw].data[11] =  pressure;
+     Nw++;
+     if (Nw>BUF_LEN) Nw=0;
+    }
   }
+  
+  
  
 }
 
@@ -330,9 +338,9 @@ void loop() {
   //ring buffer to avoid data loss
    //print data to file on SD card, using commas to seperate
    if (Nr<=Nw) { //need something to check the data write doesn't get ahead of the PID loop
-   dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
-   Nr++;
-   if (Nr>BUF_LEN) Nr=0; 
+     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
+     Nr++;
+     if (Nr>BUF_LEN) Nr=0; 
    }
   
   //if statement to stop the loop after 30 minutes
@@ -355,6 +363,11 @@ void loop() {
   if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     MsTimer2::stop();
     dataFile.close();
+    while (Nr<=Nw) { //need something to check the data write doesn't get ahead of the PID loop
+     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
+     Nr++;
+     if (Nr>BUF_LEN) Nr=0; 
+   }
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
     servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
@@ -362,9 +375,9 @@ void loop() {
     digitalWrite(greenLedPin, LOW);    // turn LED off
     digitalWrite(redLedPin, LOW);    // turn LED off
     delay(1000); //wait a second
-   // digitalWrite(recoveryPin, HIGH); //deploy chute
+    digitalWrite(recoveryPin, HIGH); //deploy chute
     delay(3000); //wait 3 seconds
-   // digitalWrite(recoveryPin, LOW); //turn off mosfet
+    digitalWrite(recoveryPin, LOW); //turn off mosfet
 
     delay(100000000); //is there a way to break out of the loop
   }
