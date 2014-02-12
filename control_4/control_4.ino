@@ -29,7 +29,7 @@ class data_buffer {
   float data[12];
 };
 data_buffer buffer[BUF_LEN]; //array to contain data
-int Nw=0, Nr=0;
+int fill=0, read_index=0;
 
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
@@ -307,10 +307,11 @@ void PID(){
     
     //store data from this loop
     //check buffer isn't full
-    if (Nw < Nr || (Nw=BUF_LEN && Nr ==0) {
+    if (fill >= BUF_LEN) {
       textFile.println("buffer exceeded");
     }
-    else {      
+    else {
+      int Nw = (read_index+fill)%BUF_LEN;
       buffer[Nw].data[0] = micros();
       buffer[Nw].data[1] =  Ax;
       buffer[Nw].data[2] =  Ay;
@@ -323,13 +324,9 @@ void PID(){
       buffer[Nw].data[9] =  Mz;
       buffer[Nw].data[10] =  temperature;
       buffer[Nw].data[11] =  pressure;
-     Nw++;
-     if (Nw>BUF_LEN) Nw=0;
+     fill++;
     }
-  }
-  
-  
- 
+  }   
 }
 
 
@@ -337,10 +334,11 @@ void loop() {
   
   //ring buffer to avoid data loss
    //print data to file on SD card, using commas to seperate
-   if (Nr<=Nw) { //need something to check the data write doesn't get ahead of the PID loop
-     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
-     Nr++;
-     if (Nr>BUF_LEN) Nr=0; 
+   if (fill!=0) { //need something to check the data write doesn't get ahead of the PID loop
+     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[read_index].data), sizeof(buffer[read_index].data));
+     fill--;
+     read_index++;
+     if (read_index > BUF_LEN-1) read_index=0; 
    }
   
   //if statement to stop the loop after 30 minutes
@@ -363,10 +361,12 @@ void loop() {
   if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
     MsTimer2::stop();
     dataFile.close();
-    while (Nr<=Nw) { //need something to check the data write doesn't get ahead of the PID loop
-     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[Nr].data), sizeof(buffer[Nr].data));
-     Nr++;
-     if (Nr>BUF_LEN) Nr=0; 
+    //write any remaining data in the buffer to the SD card
+    while (fill!=0) { //need something to check the data write doesn't get ahead of the PID loop
+     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[read_index].data), sizeof(buffer[read_index].data));
+     fill--;
+     read_index++;
+     if (read_index > BUF_LEN-1) read_index=0; 
    }
     textFile.close(); //close and save SD file, otherwise precious data will be lost
     servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
