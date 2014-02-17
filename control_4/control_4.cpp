@@ -1,3 +1,7 @@
+#include <Arduino.h>
+#undef PI
+#undef TWO_PI
+
 //Libraries
 #include <Wire.h> //The Wire library is used for I2C communication
 #include <math.h> //Maths Library
@@ -86,6 +90,9 @@ void sendDataBack() {
     Serial.write(dataFile.read());
   }
 }
+
+//prototypes
+void PID();
 
 void setup() {
   Serial.begin(115200);
