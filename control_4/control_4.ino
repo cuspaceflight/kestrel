@@ -13,7 +13,7 @@
 #include <ITG3200.h>
 #include <ADXL345.h>
 
-#define BUF_LEN 100
+#define BUF_LEN 5
 
 BMP085 barometer;
 HMC5883L compass;
@@ -38,8 +38,8 @@ const int recoveryPin =6; //pin attached to mosfet for deploying chute
 uint32_t time_for_loop = 0; //time for a loop
 uint32_t launch_time;
 
-float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
-float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
+const float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
+const float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
 float GxOff, GyOff, GzOff; //gyro offset values
 float Accx, Accy, Accz, Mag_acc; //variables for acceleration in m/s^2
 float accel_angle_x, accel_angle_y; //tilt angles from accelerometer
@@ -56,27 +56,27 @@ Servo servo_3;  // create servo object to control a servo
                 // a maximum of eight servo objects can be created
 
 //check servo centering
-int pos1 = 90, pos2 = 90, pos3 = 90, s1, s2, s3, smax = 150, smin = 30, k = 0;    // variable to store the servo position
+int pos1 = 90, pos2 = 90, pos3 = 90, s1, s2, s3, k = 0;    // variable to store the servo position
+const int smax = 150, smin = 30;
 float rP = 0, rY = 0, r = 0, theta = 0, s_a, s_b, s_c;
-float d = 20, D = 48, horn = 12, link = 28; //geometric values
-//const float pi = 3.14;
+const int d = 20, D = 48, horn = 12, link = 28; //geometric values
 
 // PID constants
-float Kp = 25, Ki = 2, Kd = 8;
+const float Kp = 25, Ki = 2, Kd = 8;
 
 //direction variables
 float w[3]; //angular velocity vector
-float eye[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} }; //indentity matrix
+const float eye[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} }; //indentity matrix
 float R1[3][3]; //rotation matrix 1
 float R2[3][3]; //rotation matrix 2
 //int I[3][1] = { {1}, {0}, {0} }; //unit vector inertial system
-float J[3] = {0, 1, 0}; //unit vector inertial system
+const float J[3] = {0, 1, 0}; //unit vector inertial system
 //int K[3][1] = { {0}, {0}, {1} }; //unit vector inertial system
 float Pitch = 0, Yaw = 0; // used to calculate gimbal movement
 float Heading; // angle between rocket vertical and inertial vertical
 float IntegralP = 0, IntegralY=0;
 float DerP = 0, DerY=0;
-float r_max = 9.5; //to be determined
+const float r_max = 9.5; //to be determined
 float previous_Pitch = 0, previous_Yaw=0;
 float previous_rP = 0, previous_rY=0, previous_r=0;
 
@@ -87,8 +87,6 @@ void sendDataBack() {
   }
 }
 
-//prototypes
-void PID();
 
 void setup() {
   Serial.begin(115200);
@@ -121,7 +119,6 @@ void setup() {
     if(dataFile) digitalWrite(redLedPin, HIGH );   // turn LED on if file has been created successfully
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
-
 
   if(accelerometer.testConnection()) textFile.println("Accelerometer connected!");
   if(compass.testConnection()) textFile.println("Compass connected!");
@@ -177,6 +174,9 @@ void setup() {
   textFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
 
   if(textFile) digitalWrite(greenLedPin, HIGH );   // turn LED on if file has been created successfully
+  textFile.print("free ram = ");
+  textFile.println(freeRam());
+  
   MsTimer2::set(10, PID); // 10ms period
   
   MsTimer2::start(); //start interupt such that function PID is called every 10ms
@@ -314,7 +314,7 @@ void PID(){
       textFile.println("buffer exceeded");
     }
     else {
-      int Nw = (read_index+fill)%BUF_LEN;
+      int Nw = (read_index+fill)%BUF_LEN; //this could be an expensive operation?
       buffer[Nw].data[0] = micros();
       buffer[Nw].data[1] =  Ax;
       buffer[Nw].data[2] =  Ay;
@@ -334,58 +334,60 @@ void PID(){
 
 
 void loop() {
+  while(true) {
+      //ring buffer to avoid data loss
+       //print data to file on SD card, using commas to seperate
+    if (fill > 0) { //need something to check the data write doesn't get ahead of the PID loop
+        read_BUF();
+      }
+    
+      //if statement to stop the loop after 30 minutes
+      if(micros() > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+        MsTimer2::stop();
+        break;
+      }
+    
+      uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
   
-  //ring buffer to avoid data loss
-   //print data to file on SD card, using commas to seperate
-   if (fill!=0) { //need something to check the data write doesn't get ahead of the PID loop
-     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[read_index].data), sizeof(buffer[read_index].data));
-     fill--;
-     read_index++;
-     if (read_index > BUF_LEN-1) read_index=0; 
+      //if statement to stop the loop after motor burn has ended and deploy chute
+      if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+        MsTimer2::stop();
+        //write any remaining data in the buffer to the SD card
+        while (fill > 0) { //need something to check the data write doesn't get ahead of the PID loop
+         read_BUF(); 
+       }
+       delay(1000); //wait a second
+       digitalWrite(recoveryPin, HIGH); //deploy chute
+       delay(3000); //wait 3 seconds
+       digitalWrite(recoveryPin, LOW); //turn off mosfet
+       break;
    }
-  
-  //if statement to stop the loop after 30 minutes
-  if(micros() > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-    MsTimer2::stop();
-    dataFile.close();
-    textFile.close(); //close and save SD file, otherwise precious data will be lost
-    servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
-    servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
-    servo_3.write(pos3);              // tell servo to go to position in variable 'pos'
-    digitalWrite(greenLedPin, LOW);    // turn LED off
-    digitalWrite(redLedPin, LOW);    // turn LED off
-
-    delay(100000000); //is there a way to break out of the loop
-  }
-  
-  uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
-  
-  //if statement to stop the loop after motor burn has ended and deploy chute
-  if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-    MsTimer2::stop();
-    dataFile.close();
-    //write any remaining data in the buffer to the SD card
-    while (fill!=0) { //need something to check the data write doesn't get ahead of the PID loop
-     dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[read_index].data), sizeof(buffer[read_index].data));
-     fill--;
-     read_index++;
-     if (read_index > BUF_LEN-1) read_index=0; 
-   }
-    textFile.close(); //close and save SD file, otherwise precious data will be lost
-    servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
-    servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
-    servo_3.write(pos3);              // tell servo to go to position in variable 'pos'
-    digitalWrite(greenLedPin, LOW);    // turn LED off
-    digitalWrite(redLedPin, LOW);    // turn LED off
-    delay(1000); //wait a second
-    digitalWrite(recoveryPin, HIGH); //deploy chute
-    delay(3000); //wait 3 seconds
-    digitalWrite(recoveryPin, LOW); //turn off mosfet
-
-    delay(100000000); //is there a way to break out of the loop
-  }
-
- 
-
-  
+   closedown();
+ }
 }
+
+void closedown() {
+  dataFile.close();
+  textFile.close(); //close and save SD file, otherwise precious data will be lost
+  servo_1.write(pos1);              // tell servo to go to position in variable 'pos'
+  servo_2.write(pos2);              // tell servo to go to position in variable 'pos'
+  servo_3.write(pos3);              // tell servo to go to position in variable 'pos'
+  digitalWrite(greenLedPin, LOW);    // turn LED off
+  digitalWrite(redLedPin, LOW);    // turn LED off
+  delay(100000000); //is there a way to break out of the loop
+}
+
+void read_BUF(){
+  dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[read_index].data), sizeof(buffer[read_index].data));
+  fill--;
+  read_index++;
+  if (read_index > BUF_LEN-1) read_index=0;  
+}
+
+int freeRam () 
+{
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
+  
