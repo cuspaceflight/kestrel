@@ -87,6 +87,9 @@ void sendDataBack() {
   }
 }
 
+bool hasLaunched = false;
+uint32_t barometer_ready_time = 0;
+bool barometer_is_temperature = false;
 
 void setup() {
   Serial.begin(115200);
@@ -181,10 +184,6 @@ void setup() {
   
   MsTimer2::start(); //start interupt such that function PID is called every 10ms
 }
-
-bool hasLaunched = false;
-uint32_t barometer_ready_time = 0;
-bool barometer_is_temperature = false;
 
 void PID(){
   //Read the x,y and z output rates from the gyroscope.
