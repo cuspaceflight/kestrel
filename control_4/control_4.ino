@@ -119,8 +119,6 @@ void setup() {
       } 
     }
 
-    if(dataFile) digitalWrite(redLedPin, HIGH );   // turn LED on if file has been created successfully
-
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
   if(accelerometer.testConnection()) textFile.println("Accelerometer connected!");
@@ -176,7 +174,7 @@ void setup() {
   //print column headers
   textFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
 
-  if(textFile) digitalWrite(greenLedPin, HIGH );   // turn LED on if file has been created successfully
+  if(textFile) digitalWrite(greenLedPin, HIGH );   // turn green LED on if file has been created successfully
   textFile.print("free ram = ");
   textFile.println(freeRam());
   
@@ -224,12 +222,12 @@ void PID(){
     //so set them to 0 whilst on the ground 
   //set R1 = to indentity matrix
     launch_time = micros();
-  Matrix.Copy((float*) eye, 3, 3, (float*) R1);
+    Matrix.Copy((float*) eye, 3, 3, (float*) R1);
   }
   else {
     hasLaunched = true;
-  
-    
+    digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
+      
     //Renormalization of R
     Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
     //a better implementation is below but in matlab code
