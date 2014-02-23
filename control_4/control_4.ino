@@ -4,7 +4,6 @@
 #include <SD.h> //SD library
 #include <Servo.h> //servo library
 #include <MatrixMath.h> //matrix library
-#include <MsTimer2.h> //library for time based interupts 
 
 //I2C devices from https://github.com/jrowberg/i2cdevlib
 #include <I2Cdev.h>
@@ -12,8 +11,6 @@
 #include <HMC5883L.h>
 #include <ITG3200.h>
 #include <ADXL345.h>
-
-#define BUF_LEN 5
 
 BMP085 barometer;
 HMC5883L compass;
@@ -24,18 +21,11 @@ ITG3200 gyro;
 File textFile; //holds information on file ebing written to on SD card
 File dataFile;
 
-class data_buffer {
-  public:
-  float data[12];
-};
-data_buffer buffer[BUF_LEN]; //array to contain data
-int fill=0, read_index=0;
-
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
 const int recoveryPin =6; //pin attached to mosfet for deploying chute
 
-uint32_t time_for_loop = 0; //time for a loop
+uint32_t time_for_loop = 10E-3; //time for a loop
 uint32_t launch_time;
 
 const float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
@@ -49,7 +39,7 @@ float accel_center_x = 0, accel_center_y = 0, accel_center_z = 0; //alternative 
 //const float p0 = 100400;     // Pressure at sea level (Pa) standard 101325
 //float altitude, previous_altitude = 0;
 
-//creat servo variables
+//create servo variables
 Servo servo_1;  // create servo object to control a servo
 Servo servo_2;  // create servo object to control a servo
 Servo servo_3;  // create servo object to control a servo
@@ -91,13 +81,16 @@ bool hasLaunched = false;
 uint32_t barometer_ready_time = 0;
 bool barometer_is_temperature = false;
 
+//prototypes
+void PID();
+void closedown();
+int freeRam();
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting");
 
   Gsensitivity = Gsensitivity * M_PI / 180; //convert degrees per second to radians per second
-
-  //Serial.begin(115200); //Create a serial connection using a 115200bps baud rate.
 
   pinMode(10, OUTPUT); //set SD CS pin to output
   pinMode(greenLedPin, OUTPUT); // Set the LED 1 pin as output
@@ -121,10 +114,10 @@ void setup() {
 
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
-  if(accelerometer.testConnection()) textFile.println("Accelerometer connected!");
-  if(compass.testConnection()) textFile.println("Compass connected!");
-  if(gyro.testConnection()) textFile.println("Gyro connected!");
-  if(barometer.testConnection()) textFile.println("Barometer connected!");
+  if(accelerometer.testConnection()) textFile.println(F("Accelerometer connected!"));
+  if(compass.testConnection()) textFile.println(F("Compass connected!"));
+  if(gyro.testConnection()) textFile.println(F("Gyro connected!"));
+  if(barometer.testConnection()) textFile.println(F("Barometer connected!"));
   textFile.print("data file is ");
   textFile.print(filename);
 
@@ -170,20 +163,61 @@ void setup() {
   servo_1.write(pos1);              // tell servo to go to position in variable 'pos1' 
   servo_2.write(pos2);              // tell servo to go to position in variable 'pos2' 
   servo_3.write(pos3);              // tell servo to go to position in variable 'pos3'
+  
+  textFile.print(F("free ram = "));
+  textFile.println(freeRam());
 
   //print column headers
-  textFile.println("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure");
+  textFile.println(F("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure"));
 
   if(textFile) digitalWrite(greenLedPin, HIGH );   // turn green LED on if file has been created successfully
-  textFile.print("free ram = ");
-  textFile.println(freeRam());
-  
-  MsTimer2::set(10, PID); // 10ms period
-  
-  MsTimer2::start(); //start interupt such that function PID is called every 10ms
+
+}
+
+void loop() {
+  while(true) {
+    uint32_t loop_start = micros();
+    //Accelerometer Read data from each axis, 2 registers per axis
+    int Ax = accelerometer.getAccelerationX(); 
+    int Ay = - accelerometer.getAccelerationY(); //make upwards positive
+    int Az = accelerometer.getAccelerationZ();
+    Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)/Asensitivity; //calucate the magnitude
+    
+    //If statement to detect launch
+    if(Mag_acc>15 or hasLaunched==true) {
+    PID(); //time to do some control
+    }
+    else launch_time = micros();
+    
+    //if statement to stop the loop after 30 minutes
+    if(micros() > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+       break;
+    }
+    
+    uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
+
+    //if statement to stop the loop after motor burn has ended and deploy chute
+    if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+     delay(1000); //wait a second
+     digitalWrite(recoveryPin, HIGH); //deploy chute
+     delay(3000); //wait 3 seconds
+     digitalWrite(recoveryPin, LOW); //turn off mosfet
+     break;
+   }
+  uint32_t loop_end = micros();
+  time_for_loop = (loop_end - loop_start);
+  while(time_for_loop < 10E3) { //make the loop time 10ms
+    loop_end = micros();
+    time_for_loop = (loop_end - loop_start);
+    delayMicroseconds(10);
+  }
+ }
+ closedown();
 }
 
 void PID(){
+  hasLaunched = true;
+  digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
   w[0] = (-1.0*gyro.getRotationX()-GxOff)/Gsensitivity; // gyro appears to use left hand coordinate system
@@ -209,158 +243,102 @@ void PID(){
   Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
   Matrix.Copy((float*) R2, 3, 3, (float*) R1);
 
-  //Accelerometer Read data from each axis, 2 registers per axis
-  int Ax = accelerometer.getAccelerationX(); 
-  int Ay = - accelerometer.getAccelerationY(); //make upwards positive
-  int Az = accelerometer.getAccelerationZ();
-  Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)/Asensitivity; //calucate the magnitude
-
-  //If statement to detect launch
-  if(Mag_acc<15 and hasLaunched==false) { //if the rocket hasn't experienced an accleration over 30 m/s^2, a is used so that it doesn't revert if the acceleration drops back below 30
-   // Serial.println("Low acceleration mode");
-    //angles from gyro will drift slowly, these need to be kept constant while the sensor is stationary
-    //so set them to 0 whilst on the ground 
-  //set R1 = to indentity matrix
-    launch_time = micros();
-    Matrix.Copy((float*) eye, 3, 3, (float*) R1);
-  }
-  else {
-    hasLaunched = true;
-    digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
-      
-    //Renormalization of R
-    Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
-    //a better implementation is below but in matlab code
-    /*xy_error=dot(R2(:,1),R2(:,2));
-    R3=zeros(3,3);
-    R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
-    R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
-    R3(:,3) = cross(R3(:,1),R3(:,2));
-    %make magnitudes equal to one, as the difference will be small can use
-    %taylor expansion to avoid square root
-    R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
-    R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
-    R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
-    */
-    
-    //use dot products to find pitch and yaw
-    Pitch = asin( Matrix.dot((float*)R1,(float*)J,3,3,3) ); //this gives the angle between the z axis and the horizontal plan (in which I and K reside) when no pitch is required this angle will be 0
-    Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
-    
-    //feed these into two PIDs
-    time_for_loop = 0.01;
-    if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
-    DerP = (Pitch - previous_Pitch)/ time_for_loop; // might want a low pass filter on here
-    previous_Pitch = Pitch;
-    rP = Kp * Pitch + Ki * IntegralP + Kd * DerP;
-    previous_rP = rP;
-      
-    if (previous_r < r_max) IntegralY = IntegralY + Yaw * time_for_loop; //stop integral causing windup      
-    DerY = (Yaw - previous_Yaw)/ time_for_loop; // might want a low pass filter on here
-    previous_Yaw = Yaw;
-    rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
-    previous_rY = rY;
-    
-    theta=atan2(rP,rY);
-    
-    r=sqrt(rP*rP+rY*rY);  
-    if (r > r_max) r = r_max;
-    previous_r = r;
-    
-    s_a = sqrt(sq(r*cos(theta) + d - D) + sq(r*sin(theta))); //angle in radians 
-    s_b = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) + d*0.866 - D*0.866)); //angle in radians 
-    s_c = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) - d*0.866 + D*0.866)); //angle in radians 
-    
-    s_a = s_a-link;
-    s_b = s_b-link;
-    s_c = s_c-link;
-    
-    // convert into servo degrees 180/M_PI = 57
-    s1 = 57*asin(s_a/horn) + pos1;
-    s2 = 57*asin(s_b/horn) + pos2;
-    s3 = 57*asin(s_c/horn) + pos3;
-    
-    //update servos with new positions
-    servo_1.write(s1);              
-    servo_2.write(s2);               
-    servo_3.write(s3);   
-    
-    //read magnetometer
-    int16_t Mx, My, Mz;
-    compass.getHeading(&Mx, &My, &Mz);
+  //Renormalization of R
+  Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
+  //a better implementation is below but in matlab code
+  /*xy_error=dot(R2(:,1),R2(:,2));
+  R3=zeros(3,3);
+  R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
+  R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
+  R3(:,3) = cross(R3(:,1),R3(:,2));
+  %make magnitudes equal to one, as the difference will be small can use
+  %taylor expansion to avoid square root
+  R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
+  R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
+  R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
+  */
   
-    float temperature = NAN;
-    float pressure = NAN;
-    if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
-      if(barometer_is_temperature) {
-        temperature = barometer.getTemperatureC();
-        barometer.setControl(BMP085_MODE_PRESSURE_0);
-        barometer_is_temperature = false;
-      }
-      else {
-        pressure = barometer.getPressure();
-        barometer.setControl(BMP085_MODE_TEMPERATURE);
-        barometer_is_temperature = true;
-      }
-      barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
-    }
+  //use dot products to find pitch and yaw
+  Pitch = asin( Matrix.dot((float*)R1,(float*)J,3,3,3) ); //this gives the angle between the z axis and the horizontal plan (in which I and K reside) when no pitch is required this angle will be 0
+  Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
+  
+  //feed these into two PIDs
+  time_for_loop = 0.01;
+  if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
+  DerP = (Pitch - previous_Pitch)/ time_for_loop; // might want a low pass filter on here
+  previous_Pitch = Pitch;
+  rP = Kp * Pitch + Ki * IntegralP + Kd * DerP;
+  previous_rP = rP;
     
-    //store data from this loop
-    //check buffer isn't full
-    if (fill >= BUF_LEN) {
-      textFile.println("buffer exceeded");
+  if (previous_r < r_max) IntegralY = IntegralY + Yaw * time_for_loop; //stop integral causing windup      
+  DerY = (Yaw - previous_Yaw)/ time_for_loop; // might want a low pass filter on here
+  previous_Yaw = Yaw;
+  rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
+  previous_rY = rY;
+  
+  theta=atan2(rP,rY);
+  
+  r=sqrt(rP*rP+rY*rY);  
+  if (r > r_max) r = r_max;
+  previous_r = r;
+  
+  s_a = sqrt(sq(r*cos(theta) + d - D) + sq(r*sin(theta))); //angle in radians 
+  s_b = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) + d*0.866 - D*0.866)); //angle in radians 
+  s_c = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) - d*0.866 + D*0.866)); //angle in radians 
+  
+  s_a = s_a-link;
+  s_b = s_b-link;
+  s_c = s_c-link;
+  
+  // convert into servo degrees 180/M_PI = 57
+  s1 = 57*asin(s_a/horn) + pos1;
+  s2 = 57*asin(s_b/horn) + pos2;
+  s3 = 57*asin(s_c/horn) + pos3;
+  
+  //update servos with new positions
+  servo_1.write(s1);              
+  servo_2.write(s2);               
+  servo_3.write(s3);   
+  
+  //read magnetometer
+  int16_t Mx, My, Mz;
+  compass.getHeading(&Mx, &My, &Mz);
+
+  float temperature = NAN;
+  float pressure = NAN;
+  if(static_cast<int32_t>(micros() - barometer_ready_time) > 0) {
+    if(barometer_is_temperature) {
+      temperature = barometer.getTemperatureC();
+      barometer.setControl(BMP085_MODE_PRESSURE_0);
+      barometer_is_temperature = false;
     }
     else {
-      int Nw = (read_index+fill)%BUF_LEN; //this could be an expensive operation?
-      buffer[Nw].data[0] = micros();
-      buffer[Nw].data[1] =  Ax;
-      buffer[Nw].data[2] =  Ay;
-      buffer[Nw].data[3] =  Az;
-      buffer[Nw].data[4] =  w[0];
-      buffer[Nw].data[5] =  w[1];
-      buffer[Nw].data[6] =  w[2];
-      buffer[Nw].data[7] =  Mx;
-      buffer[Nw].data[8] =  My;
-      buffer[Nw].data[9] =  Mz;
-      buffer[Nw].data[10] =  temperature;
-      buffer[Nw].data[11] =  pressure;
-     fill++;
+      pressure = barometer.getPressure();
+      barometer.setControl(BMP085_MODE_TEMPERATURE);
+      barometer_is_temperature = true;
     }
-  }   
-}
-
-
-void loop() {
-  while(true) {
-      //ring buffer to avoid data loss
-       //print data to file on SD card, using commas to seperate
-    if (fill > 0) { //need something to check the data write doesn't get ahead of the PID loop
-        read_BUF();
-      }
-    
-      //if statement to stop the loop after 30 minutes
-      if(micros() > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-        MsTimer2::stop();
-        break;
-      }
-    
-      uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
+    barometer_ready_time = micros() + barometer.getMeasureDelayMicroseconds();
+  }
   
-      //if statement to stop the loop after motor burn has ended and deploy chute
-      if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-        MsTimer2::stop();
-        //write any remaining data in the buffer to the SD card
-        while (fill > 0) { //need something to check the data write doesn't get ahead of the PID loop
-         read_BUF(); 
-       }
-       delay(1000); //wait a second
-       digitalWrite(recoveryPin, HIGH); //deploy chute
-       delay(3000); //wait 3 seconds
-       digitalWrite(recoveryPin, LOW); //turn off mosfet
-       break;
-   }
-   closedown();
- }
+  //print data to file on SD card, using commas to seperate
+  float data[] = {
+    loop_start,
+    time_for_loop,
+    Ax,
+    Ay,
+    Az,
+    w[0],
+    w[1],
+    w[2],
+    Mx,
+    My,
+    Mz,
+    temperature,
+    pressure
+  };
+
+  dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));
+  }   
 }
 
 void closedown() {
@@ -372,13 +350,6 @@ void closedown() {
   digitalWrite(greenLedPin, LOW);    // turn LED off
   digitalWrite(redLedPin, LOW);    // turn LED off
   delay(100000000); //is there a way to break out of the loop
-}
-
-void read_BUF(){
-  dataFile.write(reinterpret_cast<const uint8_t*>(&buffer[read_index].data), sizeof(buffer[read_index].data));
-  fill--;
-  read_index++;
-  if (read_index > BUF_LEN-1) read_index=0;  
 }
 
 int freeRam () 
