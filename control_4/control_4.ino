@@ -48,7 +48,7 @@ Servo servo_3;  // create servo object to control a servo
 //check servo centering
 int pos1 = 90, pos2 = 90, pos3 = 90, s1, s2, s3, k = 0;    // variable to store the servo position
 const int smax = 150, smin = 30;
-float rP = 0, rY = 0, r = 0, theta = 0, s_a, s_b, s_c;
+float rP = 0, rY = 0, s_a, s_b, s_c;
 
 // PID constants
 const float Kp = 25, Ki = 2, Kd = 8;
@@ -58,11 +58,8 @@ float w[3]; //angular velocity vector
 const float eye[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} }; //indentity matrix
 float R1[3][3]; //rotation matrix 1
 float R2[3][3]; //rotation matrix 2
-//int I[3][1] = { {1}, {0}, {0} }; //unit vector inertial system
 const float J[3] = {0, 1, 0}; //unit vector inertial system
-//int K[3][1] = { {0}, {0}, {1} }; //unit vector inertial system
 float Pitch = 0, Yaw = 0; // used to calculate gimbal movement
-float Heading; // angle between rocket vertical and inertial vertical
 float IntegralP = 0, IntegralY=0;
 float DerP = 0, DerY=0;
 const float r_max = 9.5; //to be determined
@@ -270,6 +267,14 @@ void PID(){
     rY,
     rP
   };
+  
+  float r_mag =sqrt(rY*rY +rP*rP);
+  if (r_mag > r_max) {
+    //scale CoC
+    float scale= r_max/r_mag;
+    CoC[0]=CoC[0]*scale;
+    CoC[1]=CoC[1]*scale;
+  }
   
   const int d = 20, D = 48, horn = 12, link = 28; //geometric values
   
