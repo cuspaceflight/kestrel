@@ -58,7 +58,7 @@ float w[3]; //angular velocity vector
 const float eye[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} }; //indentity matrix
 float R1[3][3]; //rotation matrix 1
 float R2[3][3]; //rotation matrix 2
-const float J[3] = {0, 1, 0}; //unit vector inertial system
+//const float J[3] = {0, 1, 0}; //unit vector inertial system
 float Pitch = 0, Yaw = 0; // used to calculate gimbal movement
 float IntegralP = 0, IntegralY=0;
 float DerP = 0, DerY=0;
@@ -241,14 +241,12 @@ void PID(){
 
   //Renormalization of R
   Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
-   //note R1 is the matrix to transform a vector in the rocket coord sys to the world sys
-  float TRANS[3][3];
-  //find the inverse of R1, this is transforms a vector in the world coord sys to the rocket coord sys
-  Matrix.Transpose((float*)R1, 3, 3, (float*)TRANS); 
-  Matrix.Multiply((float*)TRANS,(float*)J,3,3,1,(float*)HEAD); //transform the direction vector into rocket sys
-  
-  Pitch = HEAD[2]; //component in z direction
-  Yaw = HEAD[0]; //component in x direction
+  //note R1 is the matrix to transform a vector in the rocket coord sys to the world sys
+  // the inverse (which is just the transpose) will transforms a vector in the world coord sys to the rocket coord sys
+  //we could then use it to transform J from the world coord sys to the rocket coord sys 
+  //however as this just picks out the middle column we can extract the 2 values straight from R1
+  Pitch = R1[1][2]; //component in z direction
+  Yaw = R1[1][0]; //component in x direction
   
   //feed these into two PIDs
   if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
