@@ -49,7 +49,6 @@ Servo servo_3;  // create servo object to control a servo
 int pos1 = 90, pos2 = 90, pos3 = 90, s1, s2, s3, k = 0;    // variable to store the servo position
 const int smax = 150, smin = 30;
 float rP = 0, rY = 0, r = 0, theta = 0, s_a, s_b, s_c;
-const int d = 20, D = 48, horn = 12, link = 28; //geometric values
 
 // PID constants
 const float Kp = 25, Ki = 2, Kd = 8;
@@ -245,25 +244,16 @@ void PID(){
 
   //Renormalization of R
   Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
-  //a better implementation is below but in matlab code
-  /*xy_error=dot(R2(:,1),R2(:,2));
-  R3=zeros(3,3);
-  R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
-  R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
-  R3(:,3) = cross(R3(:,1),R3(:,2));
-  %make magnitudes equal to one, as the difference will be small can use
-  %taylor expansion to avoid square root
-  R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
-  R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
-  R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
-  */
+   //note R1 is the matrix to transform a vector in the rocket coord sys to the world sys
+  float TRANS[3][3];
+  //find the inverse of R1, this is transforms a vector in the world coord sys to the rocket coord sys
+  Matrix.Transpose((float*)R1, 3, 3, (float*)TRANS); 
+  Matrix.Multiply((float*)TRANS,(float*)J,3,3,1,(float*)HEAD); //transform the direction vector into rocket sys
   
-  //use dot products to find pitch and yaw
-  Pitch = asin( Matrix.dot((float*)R1,(float*)J,3,3,3) ); //this gives the angle between the z axis and the horizontal plan (in which I and K reside) when no pitch is required this angle will be 0
-  Yaw = asin ( Matrix.dot((float*)R1,(float*)J,3,3,1) );
+  Pitch = HEAD[2]; //component in z direction
+  Yaw = HEAD[0]; //component in x direction
   
   //feed these into two PIDs
-  time_for_loop = 0.01;
   if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
   DerP = (Pitch - previous_Pitch)/ time_for_loop; // might want a low pass filter on here
   previous_Pitch = Pitch;
@@ -276,24 +266,36 @@ void PID(){
   rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
   previous_rY = rY;
   
-  theta=atan2(rP,rY);
+  float CoC[2]={ //vector from centre of rocket to desired motor centre
+    rY,
+    rP
+  };
   
-  r=sqrt(rP*rP+rY*rY);  
-  if (r > r_max) r = r_max;
-  previous_r = r;
+  const int d = 20, D = 48, horn = 12, link = 28; //geometric values
   
-  s_a = sqrt(sq(r*cos(theta) + d - D) + sq(r*sin(theta))); //angle in radians 
-  s_b = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) + d*0.866 - D*0.866)); //angle in radians 
-  s_c = sqrt(sq(r*cos(theta) - d*0.5 + D*0.5) + sq(r*sin(theta) - d*0.866 + D*0.866)); //angle in radians 
+  float s_A[2]={
+    D - CoC[0],
+    -(CoC[1] + d)
+  };
+  float s_B[2]={
+    0.866*D - (CoC[0] + 0.866*d),
+    -0.5*D - (CoC[1] - 0.5*d)
+  };
+  float s_C[2]={
+    -0.866*D - (CoC[0] - 0.866*d),
+    -0.5*D - (CoC[1] - 0.5*d)
+  };
   
-  s_a = s_a-link;
-  s_b = s_b-link;
-  s_c = s_c-link;
+  
+  s_a = sqrt(s_A[0]*s_A[0] + s_A[1]*s_A[1]) - link;
+  s_b = sqrt(s_B[0]*s_B[0] + s_B[1]*s_B[1]) - link;
+  s_c = sqrt(s_C[0]*s_C[0] + s_C[1]*s_C[1]) - link;
   
   // convert into servo degrees 180/M_PI = 57
   s1 = 57*asin(s_a/horn) + pos1;
   s2 = 57*asin(s_b/horn) + pos2;
   s3 = 57*asin(s_c/horn) + pos3;
+
   
   //update servos with new positions
   servo_1.write(s1);              

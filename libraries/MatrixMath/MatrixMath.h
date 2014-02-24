@@ -34,6 +34,7 @@
         int Invert(float* A, int n);
         float dot(float* A, float* B, int m, int n, int c);
         void Normalize3x3(float* A);
+		void NormalizeTay3x3(float* A);
     };
 
     extern MatrixMath Matrix;

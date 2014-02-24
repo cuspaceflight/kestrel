@@ -231,3 +231,24 @@ void MatrixMath::Normalize3x3(float* A)
         }
     }
 }
+
+//Matrix normalise rows Routine for a nearly normal matrix
+void MatrixMath::NormalizeTay3x3(float* A)
+{
+	// A = input matrix (m x n)
+
+	//an implementation which avoids square roots is below but in matlab code
+	/*xy_error=dot(R2(:,1),R2(:,2));
+	R3=zeros(3,3);
+	R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
+	R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
+	R3(:,3) = cross(R3(:,1),R3(:,2));
+	%make magnitudes equal to one, as the difference will be small can use
+	%taylor expansion to avoid square root
+	R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
+	R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
+	R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
+	*/
+	
+
+}
