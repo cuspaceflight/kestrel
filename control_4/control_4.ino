@@ -287,17 +287,18 @@ void PID(){
   
   const int d = 20, D = 48, horn = 12, link = 28; //geometric values
   
-  float s_A[2]={
-    D - CoC[0],
-    -(CoC[1] + d)
+  //vectors pointing from the locations of the servos to the points on the motor tube where the connections pivot
+  float s_A[2] = {
+    CoC[0],
+    - D + (CoC[1] + d)
   };
-  float s_B[2]={
-    0.866*D - (CoC[0] + 0.866*d),
-    -0.5*D - (CoC[1] - 0.5*d)
+  float s_B[2] = {
+    -0.866*D + (CoC[0] + 0.866*d),
+    +0.5*D + (CoC[1] - 0.5*d)
   };
-  float s_C[2]={
-    -0.866*D - (CoC[0] - 0.866*d),
-    -0.5*D - (CoC[1] - 0.5*d)
+  float s_C[2] = {
+    +0.866*D + (CoC[0] - 0.866*d),
+    +0.5*D + (CoC[1] - 0.5*d)
   };
   
   
