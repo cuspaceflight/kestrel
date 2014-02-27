@@ -30,7 +30,7 @@ void MatrixMath::Print(float* A, int m, int n, String label){
 
 void MatrixMath::Copy(float* A, int n, int m, float* B)
 {
-    int i, j, k;
+    int i, j;
     for (i=0;i<m;i++)
         for(j=0;j<n;j++)
         {
@@ -201,7 +201,7 @@ int MatrixMath::Invert(float* A, int n)
 
 //Vector dot Routine
 // C = A.B
-float MatrixMath::Dot(float* A, float* B, int m, int n, int q int c, int d)
+float MatrixMath::Dot(float* A, float* B, int m, int n, int q, int c, int d)
 {
     // A = input matrix/vector (m x n)
     // B = input vector (m x q)
@@ -230,12 +230,9 @@ void MatrixMath::Cross(float* A, float* B, int n, int c, int d, float* C, int m,
 	c = c - 1;
 	d = d - 1;
 	e = e - 1;
-	float C [3];
 	C[0+e] = A[n+c] * B[2*n+d] - A[2*n+c] * B[n+d];
 	C[m+e] =-A[c] * B[2*n+d] + A[2*n+c] * B[d];
 	C[2*m+e] = A[c] * B[n+d] - A[n+c] * B[d];
-	
-	return C;
 }
 
 //Matrix normalise rows Routine
@@ -256,6 +253,7 @@ void MatrixMath::Normalize3x3(float* A)
     }
 }
 
+/*
 //Matrix normalise rows Routine for a nearly normal matrix
 void MatrixMath::NormalizeTay3x3(float* A)
 {
@@ -269,8 +267,8 @@ void MatrixMath::NormalizeTay3x3(float* A)
 	}
 	float A2[3][3];
 	for (int i = 0; i <= 2; i++){
-		A2[i][0] = A[i][0] - 0.5*xy_error*A[i][1];
-		A2[i][1] = A[i][1] - 0.5*xy_error*A[i][0];
+		A2[i*3] = A[i*3] - 0.5*xy_error*A[i*3+1];
+		A2[i*3+1] = A[i*3+1] - 0.5*xy_error*A[i*3];
 	}
 
 	Matrix.Cross(A, A, 3, 1, 2, A2, 3, 3);
@@ -287,7 +285,9 @@ void MatrixMath::NormalizeTay3x3(float* A)
 		}
 	
 	}
+    Matrix.Copy(A2, 3, 3, A1);
 	//R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
 	//R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
 	//R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
 }
+*/

@@ -25,12 +25,13 @@ const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
 const int recoveryPin =6; //pin attached to mosfet for deploying chute
 
-uint32_t time_for_loop = 10E-3; //time for a loop
+uint32_t time_for_loop; //time for a loop
 uint32_t launch_time;
 
-const float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
+float Gsensitivity = 1 / 14.375; // deg.s^-1 / LSB
 const float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution, 13.048g for 4g, 6.524 for 8g, 3.262 for 16g, these are typical value and may not be accurate
 float GxOff, GyOff, GzOff; //gyro offset values
+int Ax, Ay, Az;
 float Accx, Accy, Accz, Mag_acc; //variables for acceleration in m/s^2
 float accel_angle_x, accel_angle_y; //tilt angles from accelerometer
 float accel_center_x = 0, accel_center_y = 0, accel_center_z = 0; //alternative offsets for accelerometer which are used in the software, these seem better
@@ -170,14 +171,16 @@ void setup() {
 
 }
 
+uint32_t loop_start;
+
 void loop() {
   while(true) {
-    uint32_t loop_start = micros();
+    loop_start = micros();
     //Accelerometer Read data from each axis, 2 registers per axis
-    int Ax = accelerometer.getAccelerationX(); 
-    int Ay = - accelerometer.getAccelerationY(); //make upwards positive
-    int Az = accelerometer.getAccelerationZ();
-    Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)/Asensitivity; //calucate the magnitude
+    Ax = accelerometer.getAccelerationX(); 
+    Ay = - accelerometer.getAccelerationY(); //make upwards positive
+    Az = accelerometer.getAccelerationZ();
+    Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)*Asensitivity; //calucate the magnitude
     
     //If statement to detect launch
     if(Mag_acc>15 or hasLaunched==true) {
@@ -193,7 +196,7 @@ void loop() {
     uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
 
     //if statement to stop the loop after motor burn has ended and deploy chute
-    if(record_time > 300E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+    if(record_time > 10E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
      delay(1000); //wait a second
      digitalWrite(recoveryPin, HIGH); //deploy chute
      delay(3000); //wait 3 seconds
@@ -229,11 +232,12 @@ void PID(){
     w(3) is rate of rotation about the rocket's z axis
   */
    
+   float time_for_loop_s=time_for_loop*1E-6;
   // cross product of w converted to matrix form multiplied by time for loop and + identity matrix
   float M[3][3] = {
-    {1,-w[2]*time_for_loop,w[1]*time_for_loop},
-    {w[2]*time_for_loop,1,-w[0]*time_for_loop},
-    {-w[1]*time_for_loop,w[0]*time_for_loop,1}
+    {1,-w[2]*time_for_loop_s,w[1]*time_for_loop_s},
+    {w[2]*time_for_loop_s,1,-w[0]*time_for_loop_s},
+    {-w[1]*time_for_loop_s,w[0]*time_for_loop_s,1}
   }; 
    
   Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
@@ -249,14 +253,14 @@ void PID(){
   Yaw = R1[1][0]; //component in x direction
   
   //feed these into two PIDs
-  if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop; //stop integral causing windup      
-  DerP = (Pitch - previous_Pitch)/ time_for_loop; // might want a low pass filter on here
+  if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop_s; //stop integral causing windup      
+  DerP = (Pitch - previous_Pitch)/ time_for_loop_s; // might want a low pass filter on here
   previous_Pitch = Pitch;
   rP = Kp * Pitch + Ki * IntegralP + Kd * DerP;
   previous_rP = rP;
     
-  if (previous_r < r_max) IntegralY = IntegralY + Yaw * time_for_loop; //stop integral causing windup      
-  DerY = (Yaw - previous_Yaw)/ time_for_loop; // might want a low pass filter on here
+  if (previous_r < r_max) IntegralY = IntegralY + Yaw * time_for_loop_s; //stop integral causing windup      
+  DerY = (Yaw - previous_Yaw)/ time_for_loop_s; // might want a low pass filter on here
   previous_Yaw = Yaw;
   rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
   previous_rY = rY;
@@ -342,8 +346,7 @@ void PID(){
     pressure
   };
 
-  dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));
-  }   
+  dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));   
 }
 
 void closedown() {
