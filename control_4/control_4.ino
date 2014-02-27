@@ -197,7 +197,7 @@ void loop() {
     uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
 
     //if statement to stop the loop after motor burn has ended and deploy chute
-    if(record_time > 10E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
+    if(record_time > 30E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
      delay(1000); //wait a second
      digitalWrite(recoveryPin, HIGH); //deploy chute
      delay(3000); //wait 3 seconds
@@ -269,9 +269,13 @@ void PID(){
 
   
   float CoC[2]={ //vector from centre of rocket to desired motor centre
-    rY,
+    -rY, //requires correct sign to get motor to move in correct direction
     rP
   };
+
+  textFile.print(rY);
+  textFile.print("   ");
+  textFile.println(rP);
   
   float r_mag =sqrt(rY*rY +rP*rP);
   if (r_mag > r_max) {
