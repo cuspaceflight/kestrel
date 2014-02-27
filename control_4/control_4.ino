@@ -52,7 +52,7 @@ const int smax = 150, smin = 30;
 float rP = 0, rY = 0, s_a, s_b, s_c;
 
 // PID constants
-const float Kp = 25, Ki = 2, Kd = 8;
+const float Kp = 25, Ki = 0, Kd = 0; //Kp = 25, Ki = 2, Kd = 8;
 
 //direction variables
 float w[3]; //angular velocity vector
@@ -88,6 +88,7 @@ void setup() {
   Serial.println("Starting");
 
   Gsensitivity = Gsensitivity * M_PI / 180; //convert degrees per second to radians per second
+  Matrix.Copy((float*) eye, 3, 3, (float*) R1);
 
   pinMode(10, OUTPUT); //set SD CS pin to output
   pinMode(greenLedPin, OUTPUT); // Set the LED 1 pin as output
@@ -219,9 +220,9 @@ void PID(){
   digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = (-1.0*gyro.getRotationX()-GxOff)/Gsensitivity; // gyro appears to use left hand coordinate system
-  w[1] = (1.0*gyro.getRotationY()-GyOff)/Gsensitivity; 
-  w[2] = (1.0*gyro.getRotationZ()-GzOff)/Gsensitivity;
+  w[0] = (-1.0*gyro.getRotationX()-GxOff)*Gsensitivity; // gyro appears to use left hand coordinate system
+  w[1] = (1.0*gyro.getRotationY()-GyOff)*Gsensitivity; 
+  w[2] = (1.0*gyro.getRotationZ()-GzOff)*Gsensitivity;
   
   //gyro angle, found by intergration 
   /* R1 is the previous rotation matrix which rotates the inertial 
@@ -235,9 +236,9 @@ void PID(){
    float time_for_loop_s=time_for_loop*1E-6;
   // cross product of w converted to matrix form multiplied by time for loop and + identity matrix
   float M[3][3] = {
-    {1,-w[2]*time_for_loop_s,w[1]*time_for_loop_s},
-    {w[2]*time_for_loop_s,1,-w[0]*time_for_loop_s},
-    {-w[1]*time_for_loop_s,w[0]*time_for_loop_s,1}
+    {1.0, -w[2]*time_for_loop_s, w[1]*time_for_loop_s},
+    {w[2]*time_for_loop_s, 1.0, -w[0]*time_for_loop_s},
+    {-w[1]*time_for_loop_s, w[0]*time_for_loop_s, 1.0}
   }; 
    
   Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
@@ -252,6 +253,7 @@ void PID(){
   Pitch = R1[1][2]; //component in z direction
   Yaw = R1[1][0]; //component in x direction
   
+  
   //feed these into two PIDs
   if (previous_r < r_max) IntegralP = IntegralP + Pitch * time_for_loop_s; //stop integral causing windup      
   DerP = (Pitch - previous_Pitch)/ time_for_loop_s; // might want a low pass filter on here
@@ -264,6 +266,7 @@ void PID(){
   previous_Yaw = Yaw;
   rY = Kp * Yaw + Ki * IntegralY + Kd * DerY;
   previous_rY = rY;
+
   
   float CoC[2]={ //vector from centre of rocket to desired motor centre
     rY,
@@ -302,7 +305,6 @@ void PID(){
   s1 = 57*asin(s_a/horn) + pos1;
   s2 = 57*asin(s_b/horn) + pos2;
   s3 = 57*asin(s_c/horn) + pos3;
-
   
   //update servos with new positions
   servo_1.write(s1);              
