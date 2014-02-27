@@ -32,8 +32,10 @@
         void Transpose(float* A, int m, int n, float* C);
         void Scale(float* A, int m, int n, float k);
         int Invert(float* A, int n);
-        float dot(float* A, float* B, int m, int n, int c);
+		float Dot(float* A, float* B, int m, int n, int q, int c, int d);
+		void Cross(float* A, float* B, int n, int c, int d, float* C, int m, int e);
         void Normalize3x3(float* A);
+		//void NormalizeTay3x3(float* A);
     };
 
     extern MatrixMath Matrix;
