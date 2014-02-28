@@ -253,25 +253,25 @@ void MatrixMath::Normalize3x3(float* A)
     }
 }
 
-/*
+
 //Matrix normalise rows Routine for a nearly normal matrix
 void MatrixMath::NormalizeTay3x3(float* A)
-{
+{ //WARNING this function doesn't work yet
 	// A = input matrix (m x n)
 
 	//an implementation which avoids square roots is below but in matlab code
 
-	float xy_error=0;
+	float xy_error = 0;
 	for (int i = 0; i <= 2; i++){ //cycle through rows
 		xy_error = xy_error + A[3 * i] * A[1 + 3 * i];  //Matrix.dot(R2(:, 1), R2(:, 2));
 	}
 	float A2[3][3];
 	for (int i = 0; i <= 2; i++){
-		A2[i*3] = A[i*3] - 0.5*xy_error*A[i*3+1];
-		A2[i*3+1] = A[i*3+1] - 0.5*xy_error*A[i*3];
+		A2[i][0] = A[i * 3] - 0.5*xy_error*A[i * 3 + 1];
+		A2[i][1] = A[i * 3 + 1] - 0.5*xy_error*A[i * 3];
 	}
 
-	Matrix.Cross(A, A, 3, 1, 2, A2, 3, 3);
+	Matrix.Cross((float*)A2, (float*)A2, 3, 1, 2, (float*)A2, 3, 3);
 
 	//R3(:,1) = R2(:,1) - 0.5*xy_error*R2(:,2);
 	//R3(:,2) = R2(:,2) - 0.5*xy_error*R2(:,1);
@@ -279,15 +279,14 @@ void MatrixMath::NormalizeTay3x3(float* A)
 	//make magnitudes equal to one, as the difference will be small can use
 	//taylor expansion to avoid square root
 	for (int j = 0; j <= 2; j++){ //cycle through columns
-		float dot = Matrix.Dot(A2, A2, 3, 3, 3, (j + 1), (j + 1) );
+		float dot = Matrix.Dot((float*)A2, (float*)A2, 3, 3, 3, (j + 1), (j + 1));
 		for (int i = 0; i <= 2; i++){ //cycle through rows
 			A2[i][j] = 0.5*(3 - A2[i][j] * dot);
 		}
 	
 	}
-    Matrix.Copy(A2, 3, 3, A1);
+	Matrix.Copy((float*)A2, 3, 3, (float*)A);
 	//R3(:,1) = 0.5*(3 - dot(R3(:,1),R3(:,1))) * R3(:,1);
 	//R3(:,2) = 0.5*(3 - dot(R3(:,2),R3(:,2))) * R3(:,2);
 	//R3(:,3) = 0.5*(3 - dot(R3(:,3),R3(:,3))) * R3(:,3);
 }
-*/
