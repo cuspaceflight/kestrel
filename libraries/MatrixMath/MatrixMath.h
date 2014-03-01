@@ -35,7 +35,7 @@
 		float Dot(float* A, float* B, int m, int n, int q, int c, int d);
 		void Cross(float* A, float* B, int n, int c, int d, float* C, int m, int e);
         void Normalize3x3(float* A);
-		//void NormalizeTay3x3(float* A);
+		void NormalizeTay3x3(float* A);
     };
 
     extern MatrixMath Matrix;

@@ -281,7 +281,7 @@ void MatrixMath::NormalizeTay3x3(float* A)
 	for (int j = 0; j <= 2; j++){ //cycle through columns
 		float dot = Matrix.Dot((float*)A2, (float*)A2, 3, 3, 3, (j + 1), (j + 1));
 		for (int i = 0; i <= 2; i++){ //cycle through rows
-			A2[i][j] = 0.5*(3 - A2[i][j] * dot);
+			A2[i][j] = 0.5*(3 - dot)*A2[i][j];
 		}
 	
 	}
