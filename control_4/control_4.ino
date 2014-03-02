@@ -113,14 +113,14 @@ void setup() {
   Wire.begin(); //Initialize the I2C communication. This will set the Arduino up as the 'Master' device.
 
   if(accelerometer.testConnection()) textFile.println(F("Accelerometer connected!"));
-  if(compass.testConnection()) textFile.println(F("Compass connected!"));
+  //if(compass.testConnection()) textFile.println(F("Compass connected!"));
   if(gyro.testConnection()) textFile.println(F("Gyro connected!"));
   if(barometer.testConnection()) textFile.println(F("Barometer connected!"));
   textFile.print("data file is ");
   textFile.print(filename);
 
   // TODO: compass.initialize();
-  compass.setMode(HMC5883L_MODE_CONTINUOUS);
+ // compass.setMode(HMC5883L_MODE_CONTINUOUS);
 
   barometer.initialize(); //calibrate Barometer
 
@@ -317,8 +317,8 @@ void PID(){
   servo_3.write(s3);   
   
   //read magnetometer
-  int16_t Mx, My, Mz;
-  compass.getHeading(&Mx, &My, &Mz);
+  //int16_t Mx, My, Mz;
+  //compass.getHeading(&Mx, &My, &Mz);
 
   float temperature = NAN;
   float pressure = NAN;
@@ -346,9 +346,9 @@ void PID(){
     w[0],
     w[1],
     w[2],
-    Mx,
-    My,
-    Mz,
+    //Mx,
+    //My,
+    //Mz,
     temperature,
     pressure
   };
