@@ -220,7 +220,7 @@ void PID(){
   digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = (-1.0*gyro.getRotationX()-GxOff)*Gsensitivity; // gyro appears to use left hand coordinate system
+  w[0] = -(1.0*gyro.getRotationX()-GxOff)*Gsensitivity; // gyro appears to use left hand coordinate system
   w[1] = (1.0*gyro.getRotationY()-GyOff)*Gsensitivity; 
   w[2] = (1.0*gyro.getRotationZ()-GzOff)*Gsensitivity;
   
@@ -245,7 +245,7 @@ void PID(){
   Matrix.Copy((float*) R2, 3, 3, (float*) R1);
 
   //Renormalization of R
-  Matrix.Normalize3x3((float*)R1); //remove errors so dot product doesn't go complex
+  Matrix.NormalizeTay3x3((float*)R1); //remove errors so dot product doesn't go complex
   //note R1 is the matrix to transform a vector in the rocket coord sys to the world sys
   // the inverse (which is just the transpose) will transforms a vector in the world coord sys to the rocket coord sys
   //we could then use it to transform J from the world coord sys to the rocket coord sys 
