@@ -52,7 +52,7 @@ const int smax = 150, smin = 30;
 float rP = 0, rY = 0, s_a, s_b, s_c;
 
 // PID constants
-const float Kp = 25, Ki = 0, Kd = 0; //Kp = 25, Ki = 2, Kd = 8;
+const float Kp = 25, Ki = 0, Kd = 8; //Kp = 25, Ki = 2, Kd = 8;
 
 //direction variables
 float w[3]; //angular velocity vector
@@ -272,10 +272,6 @@ void PID(){
     -rY, //requires correct sign to get motor to move in correct direction
     rP
   };
-
-  textFile.print(rY);
-  textFile.print("   ");
-  textFile.println(rP);
   
   float r_mag =sqrt(rY*rY +rP*rP);
   if (r_mag > r_max) {
