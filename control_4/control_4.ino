@@ -81,7 +81,6 @@ bool barometer_is_temperature = false;
 //prototypes
 void PID();
 void closedown();
-int freeRam();
 
 void setup() {
   Serial.begin(115200);
@@ -161,9 +160,6 @@ void setup() {
   servo_1.write(pos1);              // tell servo to go to position in variable 'pos1' 
   servo_2.write(pos2);              // tell servo to go to position in variable 'pos2' 
   servo_3.write(pos3);              // tell servo to go to position in variable 'pos3'
-  
-  textFile.print(F("free ram = "));
-  textFile.println(freeRam());
 
   //print column headers
   textFile.println(F("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate\tMx\tMy\tMz\tTemp\tPressure"));
@@ -221,8 +217,8 @@ void PID(){
   //Read the x,y and z output rates from the gyroscope.
   //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
   w[0] = -(1.0*gyro.getRotationX()-GxOff)*Gsensitivity; // gyro appears to use left hand coordinate system
-  w[1] = (1.0*gyro.getRotationY()-GyOff)*Gsensitivity; 
-  w[2] = (1.0*gyro.getRotationZ()-GzOff)*Gsensitivity;
+  w[1] = +(1.0*gyro.getRotationY()-GyOff)*Gsensitivity; 
+  w[2] = -(1.0*gyro.getRotationZ()-GzOff)*Gsensitivity;
   
   //gyro angle, found by intergration 
   /* R1 is the previous rotation matrix which rotates the inertial 
@@ -269,11 +265,12 @@ void PID(){
 
   
   float CoC[2]={ //vector from centre of rocket to desired motor centre
-    -rY, //requires correct sign to get motor to move in correct direction
+    rY, //requires correct sign to get motor to move in correct direction
     rP
   };
   
   float r_mag =sqrt(rY*rY +rP*rP);
+  previous_r=r_mag;
   if (r_mag > r_max) {
     //scale CoC
     float scale= r_max/r_mag;
@@ -361,12 +358,5 @@ void closedown() {
   digitalWrite(greenLedPin, LOW);    // turn LED off
   digitalWrite(redLedPin, LOW);    // turn LED off
   delay(100000000); //is there a way to break out of the loop
-}
-
-int freeRam () 
-{
-  extern int __heap_start, *__brkval; 
-  int v; 
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
 }
   
