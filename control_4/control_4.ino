@@ -135,7 +135,7 @@ void setup() {
   accelerometer.setMeasureEnabled(true);
   accelerometer.setOffset(0, 0, 0);  //for some strange reason setting these to 0 gave more false readings
 
-  delay(1000); //make sure everything is static
+  delay(5000); //make sure everything is static
   
      //Gyro Calibration
   int GxCal=0, GyCal=0, GzCal=0; 
@@ -180,7 +180,7 @@ void loop() {
     Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)*Asensitivity; //calucate the magnitude
     
     //If statement to detect launch
-    if(Mag_acc>15 or hasLaunched==true) {
+    if(Mag_acc>11 or hasLaunched==true) {
     PID(); //time to do some control
     }
     else launch_time = micros();
