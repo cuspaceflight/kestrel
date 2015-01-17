@@ -56,7 +56,7 @@ HMC5883L::HMC5883L(uint8_t address) {
  * averaging, 15 Hz data output rate, normal measurement bias, a,d 1090 gain (in
  * terms of LSB/Gauss). Be sure to adjust any settings you need specifically
  * after initialization, especially the gain settings if you happen to be seeing
- * a lot of -4096 values (see the datasheet for mor information).
+ * a lot of -4096 values (see the datasheet for more information).
  */
 void HMC5883L::initialize() {
     // write CONFIG_A register
