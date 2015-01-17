@@ -1,3 +1,4 @@
+
 //Libraries
 #include <Wire.h> //The Wire library is used for I2C communication
 #include <math.h> //Maths Library
@@ -8,9 +9,11 @@
 #include <I2Cdev.h>
 #include <ITG3200.h>
 #include <ADXL345.h>
+#include <HMC5883L.h>
 
 ADXL345 accelerometer;
 ITG3200 gyro;
+HMC5883L magnetometer;
 
 //Global variables
 File textFile; //holds information on file ebing written to on SD card
@@ -18,7 +21,6 @@ File dataFile;
 
 const int greenLedPin = 8;  // green LED is connected to pin 8
 const int redLedPin = 7;  // red LED is connected to pin 8
-const int recoveryPin =6; //pin attached to mosfet for deploying chute
 
 uint32_t time_for_loop; //time for a loop
 uint32_t launch_time;
@@ -37,21 +39,17 @@ float initialR[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} }; //indentity matrix
 float initialR2[3][3]; 
 float R1[3][3]; //rotation matrix 1
 float R2[3][3]; //rotation matrix 2
+float gref[3]; //gravity vector
+float w_Icorrection[3];
 
 //lateral variables
 float acceleration[3]= {0,0,0}; // (x,y,z) vector
-float velocity[3]= {0,0,0}; // (x,y,z) vector
-
-void sendDataBack() {
-  dataFile.seek(0);
-  while (dataFile.available()) {
-    Serial.write(dataFile.read());
-  }
-}
 
 bool hasLaunched = false;
 
 //prototypes
+void GetData();
+void updateR();
 void PID();
 void closedown();
 void serialcubeout(float* M, int length);
@@ -59,7 +57,6 @@ void serialcubeout(float* M, int length);
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting");
-  delay(2000);
 
   GsensitivityR = Gsensitivity * M_PI / 180; //convert degrees per second to radians per second
   Matrix.Copy((float*) initialR, 3, 3, (float*) R1);
@@ -141,25 +138,7 @@ void setup() {
   Serial.print(GyOff);
   Serial.print(" Gzoff ");
   Serial.println(GzOff);
-  
-  
-  w[0] = (1.0*gyro.getRotationX()-GxOff)*Gsensitivity; 
-  w[1] = (1.0*gyro.getRotationY()-GyOff)*Gsensitivity; 
-  w[2] = (1.0*gyro.getRotationZ()-GzOff)*Gsensitivity;
-  Serial.print(" w[0] ");
-  Serial.print(gyro.getRotationX());
-  Serial.print(" w[1] ");
-  Serial.print(gyro.getRotationY());
-  Serial.print(" w[2] ");
-  Serial.println(gyro.getRotationZ());
-  
-  Serial.print(" w[0] ");
-  Serial.print(w[0]);
-  Serial.print(" w[1] ");
-  Serial.print(w[1]);
-  Serial.print(" w[2] ");
-  Serial.println(w[2]);
-  
+    
   //accelerometer calibration
   acceleration[0] = accelerometer.getAccelerationX();
   acceleration[1] = accelerometer.getAccelerationY();
@@ -188,7 +167,16 @@ void setup() {
   Serial.println(Az_off);
   Serial.print("100*Asensitivity ");
   Serial.println(100*Asensitivity);
-
+  
+  //need to find the gravity vector with the R matrix zeroed
+  acceleration[0] = -(accelerometer.getAccelerationX() - Ax_off)*Asensitivity; // flip accelerometer axis so that they match gyro's
+  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
+  acceleration[2] = -(accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
+  Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
+  gref[0] = acceleration[0]/Mag_acc;
+  gref[1] = acceleration[1]/Mag_acc;
+  gref[2] = acceleration[2]/Mag_acc;
+  
   //print column headers
   //textFile.println(F("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate"));
 
@@ -199,134 +187,102 @@ void setup() {
 uint32_t loop_start;
 
 void loop() {
-  while(true) {
+  launch_time = micros();
+  while(true) { 
     loop_start = micros();
-    //Accelerometer Read data from each axis, 2 registers per axis
-    acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity;
-    acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
-    acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
-    Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
-    /*Serial.print(" ax ");
-    Serial.print(acceleration[0]);
-    Serial.print(" ay ");
-    Serial.print(acceleration[1]);
-    Serial.print(" az ");
-    Serial.println(acceleration[2]);
-    */
     
-    //TODO set intial rotation matrix using acceleration data.
-    if(hasLaunched != true){
-      initialR[0][1]=-acceleration[0]/Mag_acc;
-      initialR[1][1]=-acceleration[1]/Mag_acc;
-      initialR[2][1]=-acceleration[2]/Mag_acc;
-      //to find the 2 other axis take an arbitary vector that is roughly at right angles to the the y vector, and take the cross product
-      Matrix.Copy((float*) initialR, 3, 3, (float*) initialR2);
-      Matrix.Cross((float*)initialR, (float*)initialR, 3, 2, 1, (float*)initialR2, 3, 1);
-      // then cross these to find the third axis
-      Matrix.Cross((float*)initialR2, (float*)initialR2, 3, 1, 2, (float*)initialR2, 3, 3);
-      
-      Matrix.Copy((float*) initialR2, 3, 3, (float*) R1);
-      launch_time = micros();
-    }
+    GetData(); 
     
-    //If statement to detect launch
-    PID(); //time to do some control
+    //calculate direction of g using R
+    float gest[3]; 
+    Matrix.Multiply((float*)R1,(float*)gref,3,3,1,(float*)gest); //gest = R1 * gref
+    float correction_acc[3], gmeas[3];
+    gmeas[0] = acceleration[0]/Mag_acc;
+    gmeas[1] = acceleration[1]/Mag_acc;
+    gmeas[2] = acceleration[2]/Mag_acc;
+    Matrix.Cross((float*) gest, (float*) gmeas, 1, 1, 1, (float*) correction_acc, 1, 1);
     
+    //combine corrections from accelerometer and magnetometer
+    float total_correction[3];
+    total_correction[0]=correction_acc[0];
+    total_correction[0]=correction_acc[0];
+    total_correction[0]=correction_acc[0];
+    
+    float w_correction[3];
+    float wKp= 0.1, wKi = 0.00;
+    float time_for_loop_s=time_for_loop*1E-6;
+    w_Icorrection[0] += wKi * total_correction[0] * time_for_loop_s;
+    w_Icorrection[1] += wKi * total_correction[1] * time_for_loop_s;
+    w_Icorrection[2] += wKi * total_correction[2] * time_for_loop_s;
+    w_correction[0] = wKp*total_correction[0] + w_Icorrection[0]; 
+    w_correction[1] = wKp*total_correction[1] + w_Icorrection[1]; 
+    w_correction[2] = wKp*total_correction[2] + w_Icorrection[2]; 
+    
+    //combine correction term with reading
+    w[0] = w[0] + w_correction[0];
+    w[1] = w[1] + w_correction[1];
+    w[2] = w[2] + w_correction[2];
+    
+    updateR(); 
     serialcubeout((float*) R1, 9);
     
-    //if statement to stop the loop after 30 minutes
-    if(micros() > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-       break;
-    }
-    
-    uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
-   // Serial.print("time : ");
+    uint32_t record_time = micros() - launch_time; //time spent recording data 
+    //Serial.print("time : ");
     //Serial.println(record_time/1E6);
-
-    //if statement to stop the loop after motor burn has ended and deploy chute
-    if(record_time > 30E7) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-     delay(1000); //wait a second
+  
+    //if statement to stop the loop after a set time
+    if(record_time > 1E9) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
      break;
    }
-  uint32_t loop_end = micros();
-  time_for_loop = (loop_end - loop_start);
-  while(time_for_loop < 10E3) { //make the loop time 10ms
-    loop_end = micros();
-    time_for_loop = (loop_end - loop_start);
-    delayMicroseconds(10);
-  }
+   uint32_t loop_end = micros();
+   time_for_loop = (loop_end - loop_start);
+   
+   while(time_for_loop < 10E3) { //make the loop time 10ms
+     loop_end = micros();
+     time_for_loop = (loop_end - loop_start);
+     delayMicroseconds(10);
+   }
+   Serial.println(time_for_loop);
  }
  closedown();
 }
 
-float gx_total=0, gy_total=0, gz_total=0;
-float gx_total2=0, gy_total2=0, gz_total2=0;
-int nloops=0;
+void GetData(){
+  //get sensor data
+    //Read the x,y and z output rates from the gyroscope.
+    w[0] = (1.0*gyro.getRotationX()-GxOff)*GsensitivityR; 
+    w[1] = (1.0*gyro.getRotationY()-GyOff)*GsensitivityR; 
+    w[2] = (1.0*gyro.getRotationZ()-GzOff)*GsensitivityR;
+    //Accelerometer Read data from each axis, 2 registers per axis
+    acceleration[0] = -(accelerometer.getAccelerationX() - Ax_off)*Asensitivity;
+    acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
+    acceleration[2] = -(accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
+    Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
+}
 
-void PID(){
-  hasLaunched = true;
-  digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
-  //Read the x,y and z output rates from the gyroscope.
-  //angular velocity vector need to align/adjust gyro axis to rocket axis, clockwise rotations are positive
-  w[0] = (1.0*gyro.getRotationX()-GxOff)*GsensitivityR; // gyro appears to use left hand coordinate system
-  w[1] = (1.0*gyro.getRotationY()-GyOff)*GsensitivityR; 
-  w[2] = (1.0*gyro.getRotationZ()-GzOff)*GsensitivityR;
-  /*
-  float Gx, Gy, Gz;
-  Gx = (1.0*gyro.getRotationX()-GxOff)*Gsensitivity;
-  Gy = (1.0*gyro.getRotationY()-GyOff)*Gsensitivity;
-  Gz = (1.0*gyro.getRotationZ()-GzOff)*Gsensitivity;
-  
-  float time_for_loop_s=time_for_loop*1E-6;
-  gx_total += Gx*time_for_loop_s; // gyro appears to use left hand coordinate system
-  gy_total += Gy*time_for_loop_s; 
-  gz_total += Gz*time_for_loop_s;
-  
-  gx_total2 += sq(Gx); // gyro appears to use left hand coordinate system
-  gy_total2 += sq(Gy); 
-  gz_total2 += sq(Gz);
-  */
-  nloops += 1;
-  /*
-  //gyro angle, found by intergration 
-  // R1 is the previous rotation matrix which rotates the inertial 
-    coordinate system to the body one
-    R2 is the new matrix updated with the rotation rates from the body frame
-    w(1) is rate of rotation about the rocket's x axis 
-    w(2) is rate of rotation about the rocket's y axis
-    w(3) is rate of rotation about the rocket's z axis
-  
-   */
+void updateR(){
   float time_for_loop_s=time_for_loop*1E-6;
   
-  // cross product of w converted to matrix form multiplied by time for loop and + identity matrix
+  // update matrix
   float M[3][3] = {
     {1.0, -w[2]*time_for_loop_s, w[1]*time_for_loop_s},
     {w[2]*time_for_loop_s, 1.0, -w[0]*time_for_loop_s},
     {-w[1]*time_for_loop_s, w[0]*time_for_loop_s, 1.0}
   }; 
    
-  Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2);
-  Matrix.Copy((float*) R2, 3, 3, (float*) R1);
-
+  Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2); //R2 = R1 * M
+  Matrix.Copy((float*) R2, 3, 3, (float*) R1); // R1 = R2
   //Renormalization of R
   Matrix.NormalizeTay3x3((float*)R1); //remove errors so dot product doesn't go complex
-  //note R1 is the matrix to transform a vector in the rocket coord sys to the world sys
-  // the inverse (which is just the transpose) will transforms a vector in the world coord sys to the rocket coord sys
-  //we could then use it to transform J from the world coord sys to the rocket coord sys 
-  //however as this just picks out the middle column we can extract the 2 values straight from R1
- /*
-  // subtract gravity vector from acceleration vector
-  float g = -9.81;
-  acceleration[0] -= g*R1[0][1];
-  acceleration[1] -= g*R1[1][1];
-  acceleration[2] -= g*R1[2][1];
- 
- //integrate accelerations to get velocities
- velocity[0] += acceleration[0]*time_for_loop_s;
- velocity[1] += acceleration[1]*time_for_loop_s;
- velocity[2] += acceleration[2]*time_for_loop_s;
-  */
+}
+
+
+void PID(){
+  hasLaunched = true;
+  digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
+
+  
+
   //print data to file on SD card, using commas to seperate
  /* float data[] = {
     loop_start,
@@ -338,43 +294,6 @@ void PID(){
     w[1],
     w[2],
   };*/
-  /*
-  Serial.print(" ax ");
-  Serial.print(acceleration[0]);
-  Serial.print(" ay ");
-  Serial.print(acceleration[1]);
-  Serial.print(" az ");
-  Serial.println(acceleration[2]);
-  Serial.print(" Vx ");
-  Serial.print(velocity[0]);
-  Serial.print(" Vy ");
-  Serial.print(velocity[1]);
-  Serial.print(" Vz ");
-  Serial.println(velocity[2]);
-  /*
-  Serial.print(" w[0] ");
-  Serial.print(100*w[0]);
-  Serial.print(" w[1] ");
-  Serial.print(100*w[1]);
-  Serial.print(" w[2] ");
-  Serial.println(100*w[2]);
-  /*
-  Serial.print(" gyroX ");
-  Serial.print(gyro.getRotationX());
-  Serial.print(" gyroY ");
-  Serial.print(gyro.getRotationY());
-  Serial.print(" gyroZ ");
-  Serial.println(gyro.getRotationZ());
-  Matrix.Print((float*)R1, 3, 3, "R1");
-  /*
-  Serial.print(" gx total ");
-  Serial.print(gx_total);
-  Serial.print(" gy total ");
-  Serial.print(gy_total);
-  Serial.print(" gz total ");
-  Serial.println(gz_total);
-  */
-  
   
   //dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));   //write data to sd card
 }
@@ -384,26 +303,11 @@ void closedown() {
   textFile.close(); //close and save SD file, otherwise precious data will be lost
   digitalWrite(greenLedPin, LOW);    // turn LED off
   digitalWrite(redLedPin, LOW);    // turn LED off
-  /*
-  Serial.print(" gx total ");
-  Serial.print(gx_total);
-  Serial.print(" gy total ");
-  Serial.print(gy_total);
-  Serial.print(" gz total ");
-  Serial.println(gz_total);
-  Serial.print(" gx total 2 ");
-  Serial.print(gx_total2);
-  Serial.print(" gy total 2 ");
-  Serial.print(gy_total2);
-  Serial.print(" gz total 2 ");
-  Serial.println(gz_total2);*/
-  Serial.print(" n ");
-  Serial.println(nloops);  
-  
   delay(100000000); //is there a way to break out of the loop
 }
-  
+    
 void serialcubeout(float* M, int length){
+  //function to send data to cube visualization
   char cmd;
   cmd = Serial.read();
   while(!Serial.available()) {
@@ -416,11 +320,11 @@ void serialcubeout(float* M, int length){
     }
     Serial.println("");
   }
-  
 }
   
    
 void serialFloatPrint(float f) {
+  //function to print floats in hex, used by serialcubeout
   byte * b = (byte *) &f;
   for(int i=0; i<4; i++) {
     
@@ -433,11 +337,4 @@ void serialFloatPrint(float f) {
     Serial.print(c1);
     Serial.print(c2);
   }
-}
-
-char serial_busy_wait() {
-  while(!Serial.available()) {
-    ; // do nothing until ready
-  }
-  return Serial.read();
 }
