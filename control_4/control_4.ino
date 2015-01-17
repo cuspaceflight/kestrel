@@ -138,19 +138,19 @@ void setup() {
   delay(1000); //make sure everything is static
   
      //Gyro Calibration
-  int GxCal=0, GyCal=0, GzCal=0; 
+  long GxCal=0, GyCal=0, GzCal=0; 
   
   for (uint8_t i=0; i<50; i++) {
     //Read the x,y and z output rates from the gyroscope and take an average of 50 results
-    GxCal = GxCal + gyro.getRotationX();
-    GyCal = GyCal + gyro.getRotationY();
-    GzCal = GzCal + gyro.getRotationZ();
+    GxCal += gyro.getRotationX();
+    GyCal += gyro.getRotationY();
+    GzCal += gyro.getRotationZ();
     delay(10);
   }
   //use these to find gyro offsets
-  GxOff=GxCal/50;
-  GyOff=GyCal/50;
-  GzOff=GzCal/50;
+  GxOff=1.0*GxCal/50;
+  GyOff=1.0*GyCal/50;
+  GzOff=1.0*GzCal/50;
   
   //attach servos 
   servo_1.attach(2);  // attaches the servo on pin 2 to the servo object 1
