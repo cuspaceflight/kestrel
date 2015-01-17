@@ -40,7 +40,10 @@ float initialR2[3][3];
 float R1[3][3]; //rotation matrix 1
 float R2[3][3]; //rotation matrix 2
 float gref[3]; //gravity vector
-float w_Icorrection[3];
+float w_Icorrection[3]={0,0,0};
+int16_t Mx, My, Mz;
+float mref[3];
+float Mag_mag;
 
 //lateral variables
 float acceleration[3]= {0,0,0}; // (x,y,z) vector
@@ -50,7 +53,7 @@ bool hasLaunched = false;
 //prototypes
 void GetData();
 void updateR();
-void PID();
+void drift_correction();
 void closedown();
 void serialcubeout(float* M, int length);
 
@@ -90,6 +93,7 @@ void setup() {
   
   if(accelerometer.testConnection()) Serial.println(F("Accelerometer connected!"));
   if(gyro.testConnection()) Serial.println(F("Gyro connected!"));
+  if(magnetometer.testConnection()) Serial.println(F("Magnetometer connected!"));
   
   //configure the gyro
   gyro.setFullScaleRange(ITG3200_FULLSCALE_2000); //only ITG3200_FULLSCALE_2000 is documented
@@ -101,8 +105,17 @@ void setup() {
   accelerometer.setRange(ADXL345_RANGE_16G);
   accelerometer.setRate(ADXL345_RATE_100); //Hz
   accelerometer.setMeasureEnabled(true);
-  accelerometer.setOffset(0, 0, 0);  //for some strange reason setting these to 0 gave more false readings
-
+  accelerometer.setOffset(0, 0, 0);  
+  
+  //configure magnetometer
+  magnetometer.initialize();
+  magnetometer.setSampleAveraging(HMC5883L_AVERAGING_1);
+  magnetometer.setDataRate(HMC5883L_RATE_75); //75Hz
+  magnetometer.setMeasurementBias(HMC5883L_BIAS_NORMAL); 
+  magnetometer.setGain(HMC5883L_GAIN_1090);  
+  //magnetometer.setMode(HMC5883L_MODE_CONTINUOUS); // can't get this to work
+  //Serial.println(magnetometer.getMode());
+  
   delay(1000); //make sure everything is static
   
   Serial.print(" w[0] ");
@@ -169,13 +182,20 @@ void setup() {
   Serial.println(100*Asensitivity);
   
   //need to find the gravity vector with the R matrix zeroed
-  acceleration[0] = -(accelerometer.getAccelerationX() - Ax_off)*Asensitivity; // flip accelerometer axis so that they match gyro's
+  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity; // flip accelerometer axis so that they match gyro's
   acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
-  acceleration[2] = -(accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
+  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
   Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
   gref[0] = acceleration[0]/Mag_acc;
   gref[1] = acceleration[1]/Mag_acc;
   gref[2] = acceleration[2]/Mag_acc;
+  
+  //need to find the magnetic vector with the R matrix zeroed
+  magnetometer.getHeading(&Mx, &My, &Mz);
+  Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
+  mref[0] = Mx/Mag_mag;
+  mref[1] = My/Mag_mag;
+  mref[2] = Mz/Mag_mag;
   
   //print column headers
   //textFile.println(F("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate"));
@@ -185,6 +205,7 @@ void setup() {
 }
 
 uint32_t loop_start;
+int n=0;
 
 void loop() {
   launch_time = micros();
@@ -193,37 +214,10 @@ void loop() {
     
     GetData(); 
     
-    //calculate direction of g using R
-    float gest[3]; 
-    Matrix.Multiply((float*)R1,(float*)gref,3,3,1,(float*)gest); //gest = R1 * gref
-    float correction_acc[3], gmeas[3];
-    gmeas[0] = acceleration[0]/Mag_acc;
-    gmeas[1] = acceleration[1]/Mag_acc;
-    gmeas[2] = acceleration[2]/Mag_acc;
-    Matrix.Cross((float*) gest, (float*) gmeas, 1, 1, 1, (float*) correction_acc, 1, 1);
-    
-    //combine corrections from accelerometer and magnetometer
-    float total_correction[3];
-    total_correction[0]=correction_acc[0];
-    total_correction[0]=correction_acc[0];
-    total_correction[0]=correction_acc[0];
-    
-    float w_correction[3];
-    float wKp= 0.1, wKi = 0.00;
-    float time_for_loop_s=time_for_loop*1E-6;
-    w_Icorrection[0] += wKi * total_correction[0] * time_for_loop_s;
-    w_Icorrection[1] += wKi * total_correction[1] * time_for_loop_s;
-    w_Icorrection[2] += wKi * total_correction[2] * time_for_loop_s;
-    w_correction[0] = wKp*total_correction[0] + w_Icorrection[0]; 
-    w_correction[1] = wKp*total_correction[1] + w_Icorrection[1]; 
-    w_correction[2] = wKp*total_correction[2] + w_Icorrection[2]; 
-    
-    //combine correction term with reading
-    w[0] = w[0] + w_correction[0];
-    w[1] = w[1] + w_correction[1];
-    w[2] = w[2] + w_correction[2];
+    drift_correction();
     
     updateR(); 
+    
     serialcubeout((float*) R1, 9);
     
     uint32_t record_time = micros() - launch_time; //time spent recording data 
@@ -242,22 +236,35 @@ void loop() {
      time_for_loop = (loop_end - loop_start);
      delayMicroseconds(10);
    }
-   Serial.println(time_for_loop);
+   //Serial.println(time_for_loop);
  }
  closedown();
 }
 
 void GetData(){
   //get sensor data
-    //Read the x,y and z output rates from the gyroscope.
-    w[0] = (1.0*gyro.getRotationX()-GxOff)*GsensitivityR; 
-    w[1] = (1.0*gyro.getRotationY()-GyOff)*GsensitivityR; 
-    w[2] = (1.0*gyro.getRotationZ()-GzOff)*GsensitivityR;
-    //Accelerometer Read data from each axis, 2 registers per axis
-    acceleration[0] = -(accelerometer.getAccelerationX() - Ax_off)*Asensitivity;
-    acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
-    acceleration[2] = -(accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
-    Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
+  //Read the x,y and z output rates from the gyroscope.
+  w[0] = (1.0*gyro.getRotationX()-GxOff)*GsensitivityR; 
+  w[1] = (1.0*gyro.getRotationY()-GyOff)*GsensitivityR; 
+  w[2] = (1.0*gyro.getRotationZ()-GzOff)*GsensitivityR;
+  //Accelerometer Read data from each axis, 2 registers per axis
+  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity;
+  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
+  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
+  Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
+  //read magnetometer
+  magnetometer.getHeading(&Mx, &My, &Mz);
+  Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
+  /*n++;
+  if (n>10){
+    Serial.print("Mx ");
+    Serial.print(Mx);
+    Serial.print(" My "); 
+    Serial.print(My);
+    Serial.print(" Mz ");
+    Serial.println(Mz);
+    n=0;
+  }*/
 }
 
 void updateR(){
@@ -265,9 +272,9 @@ void updateR(){
   
   // update matrix
   float M[3][3] = {
-    {1.0, -w[2]*time_for_loop_s, w[1]*time_for_loop_s},
-    {w[2]*time_for_loop_s, 1.0, -w[0]*time_for_loop_s},
-    {-w[1]*time_for_loop_s, w[0]*time_for_loop_s, 1.0}
+    {1.0, w[2]*time_for_loop_s, -w[1]*time_for_loop_s},
+    {-w[2]*time_for_loop_s, 1.0, w[0]*time_for_loop_s},
+    {w[1]*time_for_loop_s, -w[0]*time_for_loop_s, 1.0}
   }; 
    
   Matrix.Multiply((float*)R1,(float*)M,3,3,3,(float*)R2); //R2 = R1 * M
@@ -276,26 +283,79 @@ void updateR(){
   Matrix.NormalizeTay3x3((float*)R1); //remove errors so dot product doesn't go complex
 }
 
-
-void PID(){
-  hasLaunched = true;
-  digitalWrite(redLedPin, HIGH ); //turn on red led if rocket has launched
-
+void drift_correction(){
+  //calculate direction of g using R
+  float gest[3]; 
+  Matrix.Multiply((float*)R1,(float*)gref,3,3,1,(float*)gest); //gest = R1 * gref
+  float correction_acc[3], gmeas[3];
+  gmeas[0] = acceleration[0]/Mag_acc;
+  gmeas[1] = acceleration[1]/Mag_acc;
+  gmeas[2] = acceleration[2]/Mag_acc;
+  Matrix.Cross((float*) gest, (float*) gmeas, 1, 1, 1, (float*) correction_acc, 1, 1);
   
-
-  //print data to file on SD card, using commas to seperate
- /* float data[] = {
-    loop_start,
-    time_for_loop,
-    Ax,
-    Ay,
-    Az,
-    w[0],
-    w[1],
-    w[2],
-  };*/
+  //same approach but with the gravity vector
+  float mest[3]; 
+  Matrix.Multiply((float*)R1,(float*)mref,3,3,1,(float*)mest); //gest = R1 * gref
+  float correction_mag[3], mmeas[3];
+  mmeas[0] = Mx/Mag_mag;
+  mmeas[1] = My/Mag_mag;
+  mmeas[2] = Mz/Mag_mag;
+  Matrix.Cross((float*) mest, (float*) mmeas, 1, 1, 1, (float*) correction_mag, 1, 1);
+  /*
+  n++;
+  if (n>10){
+    Serial.print("mestx ");
+    Serial.print(mest[0]);
+    Serial.print(" mesty "); 
+    Serial.print(mest[1]);
+    Serial.print(" mestz ");
+    Serial.println(mest[2]);
+    Serial.print("mmeasx ");
+    Serial.print(gmeas[0]);
+    Serial.print(" mmeasy "); 
+    Serial.print(mmeas[1]);
+    Serial.print(" mmeasz ");
+    Serial.println(mmeas[2]);
+    n=0;
+  }
   
-  //dataFile.write(reinterpret_cast<const uint8_t*>(&data), sizeof(data));   //write data to sd card
+  n++;
+  if (n>10){
+    Serial.print("gestx ");
+    Serial.print(gest[0]);
+    Serial.print(" gesty "); 
+    Serial.print(gest[1]);
+    Serial.print(" gestz ");
+    Serial.println(gest[2]);
+    Serial.print("gmeasx ");
+    Serial.print(gmeas[0]);
+    Serial.print(" gmeasy "); 
+    Serial.print(gmeas[1]);
+    Serial.print(" gmeasz ");
+    Serial.println(gmeas[2]);
+    n=0;
+  }*/
+  
+  //combine corrections from accelerometer and magnetometer
+  float total_correction[3];
+  total_correction[0] = correction_acc[0] + correction_mag[0];
+  total_correction[1] = correction_acc[1] + correction_mag[1];
+  total_correction[2] = correction_acc[2] + correction_mag[2];
+  
+  float w_correction[3];
+  float wKp= 1, wKi = 0;
+  float time_for_loop_s=time_for_loop*1E-6;
+  w_Icorrection[0] += wKi * total_correction[0] * time_for_loop_s;
+  w_Icorrection[1] += wKi * total_correction[1] * time_for_loop_s;
+  w_Icorrection[2] += wKi * total_correction[2] * time_for_loop_s;
+  w_correction[0] = wKp*total_correction[0] + w_Icorrection[0]; 
+  w_correction[1] = wKp*total_correction[1] + w_Icorrection[1]; 
+  w_correction[2] = wKp*total_correction[2] + w_Icorrection[2]; 
+  
+  //combine correction term with reading
+  w[0] = 0*w[0] - w_correction[0];
+  w[1] = 0*w[1] - w_correction[1];
+  w[2] = 0*w[2] - w_correction[2];
 }
 
 void closedown() {
