@@ -43,7 +43,7 @@ float R2[3][3]; //rotation matrix 2
 float gref[3]; //gravity vector
 float w_Icorrection[3]={0,0,0};
 int16_t Mx, My, Mz;
-float Mxoff = 2.5, Myoff=-46, Mzoff=-13;
+float Mxoff = 1.5, Myoff = -108.5, Mzoff = -34.5;
 float Mxscale = 0.9554, Myscale = 0.9492, Mzscale = 1.1114;
 float mref[3];
 float Mag_mag;
@@ -225,7 +225,7 @@ void loop() {
     
     updateR(); 
     
-    //serialcubeout((float*) R1, 9);
+    serialcubeout((float*) R1, 9);
     
     uint32_t record_time = micros() - launch_time; //time spent recording data 
     //Serial.print("time : ");
@@ -269,12 +269,12 @@ void GetData(){
   Mz *= Mzscale;
   Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
 
-    /*Serial.print("Mx ");
+   /* Serial.print("Mx ");
     Serial.print(Mx);
     Serial.print(" My "); 
     Serial.print(My);
     Serial.print(" Mz ");
-    Serial.println(Mz);
+    Serial.println(Mz);/*
     if( Serial.read() == ' ') {
       Serial.print("Ax ");
       Serial.print(acceleration[0]);
@@ -357,7 +357,7 @@ void drift_correction(){
   total_correction[2] = correction_acc[2] + correction_mag[2];
   
   float w_correction[3];
-  float wKp= 0, wKi = 0;
+  float wKp= 0.1, wKi = 0;
   float time_for_loop_s=time_for_loop*1E-6;
   w_Icorrection[0] += wKi * total_correction[0] * time_for_loop_s;
   w_Icorrection[1] += wKi * total_correction[1] * time_for_loop_s;
@@ -367,9 +367,9 @@ void drift_correction(){
   w_correction[2] = wKp*total_correction[2] + w_Icorrection[2]; 
   
   //combine correction term with reading
-  w[0] = w[0] - w_correction[0];
-  w[1] = w[1] - w_correction[1];
-  w[2] = w[2] - w_correction[2];
+  w[0] = w[0] + w_correction[0];
+  w[1] = w[1] + w_correction[1];
+  w[2] = w[2] + w_correction[2];
 }
 
 void closedown() {
