@@ -273,7 +273,10 @@ void HMC5883L::getHeading(int16_t *x, int16_t *y, int16_t *z) {
     *x = (((int16_t)buffer[0]) << 8) | buffer[1];
     *y = (((int16_t)buffer[4]) << 8) | buffer[5];
     *z = (((int16_t)buffer[2]) << 8) | buffer[3];
-}
+	/**x = (int16_t)(((uint16_t)buffer[0]) << 8 | (uint16_t)buffer[1]);
+	*y = (int16_t)(((uint16_t)buffer[4]) << 8 | (uint16_t)buffer[5]);
+	*z = (int16_t)(((uint16_t)buffer[2]) << 8 | (uint16_t)buffer[3]);*/
+}°
 /** Get X-axis heading measurement.
  * @return 16-bit signed integer with X-axis heading
  * @see HMC5883L_RA_DATAX_H

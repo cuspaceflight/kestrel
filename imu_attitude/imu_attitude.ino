@@ -31,7 +31,8 @@ float Asensitivity = 1 / 3.262;  // m.s^-2 / LSB: 26.093 for 2g/full resolution,
 float GxOff, GyOff, GzOff; //gyro offset values
 int Ax, Ay, Az;
 float Accx, Accy, Accz, Mag_acc, Acc_error; //variables for acceleration in m/s^2
-int Ax_off, Ay_off, Az_off;
+int Ax_off = 0.506, Ay_off = -0.995, Az_off = -1.011;
+float Axscale = 0.9998, Ayscale = 0.9850, Azscale = 1.0156;
 
 //direction variables
 float w[3]; //angular velocity vector
@@ -42,7 +43,8 @@ float R2[3][3]; //rotation matrix 2
 float gref[3]; //gravity vector
 float w_Icorrection[3]={0,0,0};
 int16_t Mx, My, Mz;
-float Mxoff = 45, Myoff=-115.5, Mzoff=-7.5;
+float Mxoff = 2.5, Myoff=-46, Mzoff=-13;
+float Mxscale = 0.9554, Myscale = 0.9492, Mzscale = 1.1114;
 float mref[3];
 float Mag_mag;
 
@@ -163,15 +165,13 @@ void setup() {
   Serial.print(acceleration[1]);
   Serial.print(" az ");
   Serial.println(acceleration[2]);
-  Ax_off = 0;
-  Ay_off = 1;
-  Az_off = -2;
-  
+  /*
   acceleration[0] = (1.0*accelerometer.getAccelerationX() - Ax_off);
   acceleration[1] = (1.0*accelerometer.getAccelerationY() - Ay_off);
   acceleration[2] = (1.0*accelerometer.getAccelerationZ() - Az_off);
   Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
   Asensitivity=9.81/Mag_acc;
+  */
   
   Serial.print("Ax_off ");
   Serial.print(Ax_off);
@@ -183,9 +183,9 @@ void setup() {
   Serial.println(100*Asensitivity);
   
   //need to find the gravity vector with the R matrix zeroed
-  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity; // flip accelerometer axis so that they match gyro's
-  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
-  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
+  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity*Axscale; // flip accelerometer axis so that they match gyro's
+  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity*Ayscale;
+  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity*Azscale;
   Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
   gref[0] = acceleration[0]/Mag_acc;
   gref[1] = acceleration[1]/Mag_acc;
@@ -193,9 +193,12 @@ void setup() {
   
   //need to find the magnetic vector with the R matrix zeroed
   magnetometer.getHeading(&My, &Mx, &Mz); //note the axes don't match the other sensors
-  Mx += Mxoff;
-  My += Myoff;
-  Mz += Mzoff;
+  Mx -= Mxoff;
+  My -= Myoff;
+  Mz -= Mzoff;
+  Mx *= Mxscale;
+  My *= Myscale;
+  Mz *= Mzscale;
   Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
   mref[0] = 1.0*Mx/Mag_mag;
   mref[1] = -1.0*My/Mag_mag;
@@ -218,11 +221,11 @@ void loop() {
     
     GetData(); 
     
-    //drift_correction();
+    drift_correction();
     
     updateR(); 
     
-    serialcubeout((float*) R1, 9);
+    //serialcubeout((float*) R1, 9);
     
     uint32_t record_time = micros() - launch_time; //time spent recording data 
     //Serial.print("time : ");
@@ -240,7 +243,7 @@ void loop() {
      time_for_loop = (loop_end - loop_start);
      delayMicroseconds(10);
    }
-   Serial.println(time_for_loop);
+   //Serial.println(time_for_loop);
  }
  closedown();
 }
@@ -252,25 +255,34 @@ void GetData(){
   w[1] = (1.0*gyro.getRotationY()-GyOff)*GsensitivityR; 
   w[2] = (1.0*gyro.getRotationZ()-GzOff)*GsensitivityR;
   //Accelerometer Read data from each axis, 2 registers per axis
-  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity;
-  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity ;
-  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
+  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity*Axscale;
+  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity*Ayscale;
+  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity*Azscale;
   Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
   //read magnetometer
   magnetometer.getHeading(&My, &Mx, &Mz);
-  Mx += Mxoff;
-  My += Myoff;
-  Mz += Mzoff;
+  Mx -= Mxoff;
+  My -= Myoff;
+  Mz -= Mzoff;
+  Mx *= Mxscale;
+  My *= Myscale;
+  Mz *= Mzscale;
   Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
-/*
-    Serial.print("Mx ");
+
+    /*Serial.print("Mx ");
     Serial.print(Mx);
     Serial.print(" My "); 
     Serial.print(My);
     Serial.print(" Mz ");
-    Serial.println(Mz);*/
-    
-  
+    Serial.println(Mz);
+    if( Serial.read() == ' ') {
+      Serial.print("Ax ");
+      Serial.print(acceleration[0]);
+      Serial.print(" Ay "); 
+      Serial.print(acceleration[1]);
+      Serial.print(" Az ");
+      Serial.println(acceleration[2]);
+    } */
 }
 
 void updateR(){
