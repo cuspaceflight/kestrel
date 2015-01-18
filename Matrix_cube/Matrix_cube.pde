@@ -44,7 +44,7 @@ byte[] inBuffer = new byte[22]; // this is the number of chars on each line from
 PFont font;
 final int VIEW_SIZE_X = 800, VIEW_SIZE_Y = 600;
 
-final int burst = 32;
+final int burst = 1; //initally 32
 int count = 0;
 
 void myDelay(int time) {
@@ -92,7 +92,7 @@ float decodeFloat(String inString) {
 void serialEvent(Serial p) {
   if(p.available() >= 18) {
     String inputString = p.readStringUntil('\n');
-    //print(inputString);
+    print(inputString);
     if (inputString != null && inputString.length() > 0) {
       String [] inputStringArr = split(inputString, ",");
       if(inputStringArr.length >= 10) { // q1,q2,q3,q4,\r\n so we have 5 elements
@@ -124,45 +124,45 @@ void buildBoxShape() {
   
   //Z+ (to the drawing area)
   fill(#00ff00);
-  vertex(-30, -5, 20);
-  vertex(30, -5, 20);
-  vertex(30, 5, 20);
-  vertex(-30, 5, 20);
+  vertex(20, 30, -5);
+  vertex(20, -30, -5);
+  vertex(-20, -30, -5);
+  vertex(-20, 30, -5);
   
   //Z-
   fill(#0000ff);
-  vertex(-30, -5, -20);
-  vertex(30, -5, -20);
-  vertex(30, 5, -20);
-  vertex(-30, 5, -20);
+  vertex(20, 30, 5);
+  vertex(20, -30, 5);
+  vertex(-20, -30, 5);
+  vertex(-20, 30, 5);
   
   //X-
   fill(#ff0000);
-  vertex(-30, -5, -20);
-  vertex(-30, -5, 20);
-  vertex(-30, 5, 20);
-  vertex(-30, 5, -20);
+  vertex(-20, 30, 5);
+  vertex(-20, -30, 5);
+  vertex(-20, -30, -5);
+  vertex(-20, 30, -5);
   
   //X+
   fill(#ffff00);
-  vertex(30, -5, -20);
-  vertex(30, -5, 20);
-  vertex(30, 5, 20);
-  vertex(30, 5, -20);
+  vertex(20, 30, 5);
+  vertex(20, -30, 5);
+  vertex(20, -30, -5);
+  vertex(20, 30, -5);
   
   //Y-
   fill(#ff00ff);
-  vertex(-30, -5, -20);
-  vertex(30, -5, -20);
-  vertex(30, -5, 20);
-  vertex(-30, -5, 20);
+  vertex(20, -30, 5);
+  vertex(20, -30, -5);
+  vertex(-20, -30, -5);
+  vertex(-20, -30, 5);
   
   //Y+
   fill(#00ffff);
-  vertex(-30, 5, -20);
-  vertex(30, 5, -20);
-  vertex(30, 5, 20);
-  vertex(-30, 5, 20);
+  vertex(20, 30, 5);
+  vertex(20, 30, -5);
+  vertex(-20, 30, -5);
+  vertex(-20, 30, 5);
   
   endShape();
 }
@@ -175,9 +175,12 @@ void drawCube() {
     
     // a demonstration of the following is at 
     // http://www.varesano.net/blog/fabio/ahrs-sensor-fusion-orientation-filter-3d-graphical-rotating-cube
+    rotateX(-Euler[0]);
+    rotateY(-Euler[1]);
     rotateZ(-Euler[2]);
-    rotateX(-Euler[1]);
-    rotateY(-Euler[0]);
+    // euler[0] = psi
+    // euler[1] = theta
+    // euler[2] =  phi
     
     buildBoxShape();
     
@@ -194,14 +197,17 @@ void draw() {
     text("Disable home position by pressing \"n\"", 20, VIEW_SIZE_Y - 30);
   }
   else {
-    MToEuler(q, Euler);
+    MToEuler(M, Euler);
     text("Point FreeIMU's X axis to your monitor then press \"h\"", 20, VIEW_SIZE_Y - 30);
   }
   
+  
   textFont(font, 20);
   textAlign(LEFT, TOP);
-  text("Q:\n" + q[0] + "\n" + q[1] + "\n" + q[2] + "\n" + q[3], 20, 20);
-  text("Euler Angles:\nYaw (psi)  : " + degrees(Euler[0]) + "\nPitch (theta): " + degrees(Euler[1]) + "\nRoll (phi)  : " + degrees(Euler[2]), 200, 20);
+  
+  text("M:\n" + M[0] + " " + M[1] + " " + M[2] + "\n" + M[3] + " " + M[4] + " " + M[5] + "\n" + M[6] + " " + M[7] + " " + M[8], 20, 20);
+  text("Euler Angles:\nYaw (psi)  : " + degrees(Euler[0]) + "\nPitch (theta): " + degrees(Euler[1]) + "\nRoll (phi)  : " + degrees(Euler[2]), 500, 20);
+    
   
   drawCube();
   //myPort.write("q" + 1);
@@ -212,7 +218,7 @@ void keyPressed() {
   if(key == 'h') {
     println("pressed h");
     
-    // set hq the home quaternion as the quatnion conjugate coming from the sensor fusion
+    // set hM the home matrix as the quatnion conjugate coming from the sensor fusion
     hM = Mtran(M);
     
   }
@@ -230,41 +236,43 @@ void MToEuler(float [] M, float [] euler) {
  // euler[1] = -asin(2 * q[1] * q[3] + 2 * q[0] * q[2]); // theta
  // euler[2] = atan2(2 * q[2] * q[3] - 2 * q[0] * q[1], 2 * q[0] * q[0] + 2 * q[3] * q[3] - 1); // phi
   
-  float theta_1, theta_2, psi_1, psi_2, phi_1, phi2;
+  float theta_1, theta_2, psi_1, psi_2, phi_1, phi_2;
   if(M[6]==1 || M[6] ==-1){
     phi_1=0;
     float delta;
     delta = atan2(M[1],M[2]);
-    if(M[6]=-1){ 
-      theta_1=M_PI/2;
-      psi=phi+detla;
+    if(M[6] == -1){ 
+      theta_1= PI/2;
+      psi_1=phi_1+delta;
     }
     else{
-      theta_1=-M_PI/2;
-      psi=-phi+detla;
+      theta_1=-PI/2;
+      psi_1=-phi_1+delta;
     }
   }
   else {
     theta_1 = -asin(M[6]);
-    theta_1 = M_PI + asin(M[6]);
+    theta_2 = PI + asin(M[6]);
     psi_1 = atan2(M[7]/cos(theta_1),M[8]/cos(theta_1));
     psi_2 = atan2(M[7]/cos(theta_2),M[8]/cos(theta_2));
     phi_1=atan2(M[3]/cos(theta_1), M[0]/cos(theta_1));
     phi_2=atan2(M[3]/cos(theta_2), M[0]/cos(theta_2));
   }
+  
   euler[0] = psi_1; //psi
   euler[1] = theta_1; //theta
-  euler[3] = phi_1;//phi
+  euler[2] = phi_1;//phi
 }
 
-void qToEuler(float [] M, float [] euler) {
+void qToEuler(float [] q, float [] euler) {
   euler[0] = atan2(2 * q[1] * q[2] - 2 * q[0] * q[3], 2 * q[0]*q[0] + 2 * q[1] * q[1] - 1); // psi
   euler[1] = -asin(2 * q[1] * q[3] + 2 * q[0] * q[2]); // theta
   euler[2] = atan2(2 * q[2] * q[3] - 2 * q[0] * q[1], 2 * q[0] * q[0] + 2 * q[3] * q[3] - 1); // phi
 }
+
 float [] MProd(float [] A, float [] B) {
   float [] M = new float[9];
-  int m=3, p=3, m=3  
+  int m=3, p=3, n=3;  
   int i, j, k;
       for (i=0;i<m;i++)
           for(j=0;j<n;j++)
@@ -292,7 +300,7 @@ float [] quatAxisAngle(float [] axis, float angle) {
   return q;
 }
 
-// return the quaternion conjugate of quat
+// return the transpose of a matrix
 float [] Mtran(float [] M) {
   float [] tran = new float[9];
   int m=3, n=3;

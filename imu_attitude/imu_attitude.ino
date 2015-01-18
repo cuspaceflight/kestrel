@@ -42,6 +42,7 @@ float R2[3][3]; //rotation matrix 2
 float gref[3]; //gravity vector
 float w_Icorrection[3]={0,0,0};
 int16_t Mx, My, Mz;
+float Mxoff = 45, Myoff=-115.5, Mzoff=-7.5;
 float mref[3];
 float Mag_mag;
 
@@ -191,11 +192,14 @@ void setup() {
   gref[2] = acceleration[2]/Mag_acc;
   
   //need to find the magnetic vector with the R matrix zeroed
-  magnetometer.getHeading(&Mx, &My, &Mz);
+  magnetometer.getHeading(&My, &Mx, &Mz); //note the axes don't match the other sensors
+  Mx += Mxoff;
+  My += Myoff;
+  Mz += Mzoff;
   Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
-  mref[0] = Mx/Mag_mag;
-  mref[1] = My/Mag_mag;
-  mref[2] = Mz/Mag_mag;
+  mref[0] = 1.0*Mx/Mag_mag;
+  mref[1] = -1.0*My/Mag_mag;
+  mref[2] = 1.0*Mz/Mag_mag;
   
   //print column headers
   //textFile.println(F("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate"));
@@ -214,7 +218,7 @@ void loop() {
     
     GetData(); 
     
-    drift_correction();
+    //drift_correction();
     
     updateR(); 
     
@@ -236,7 +240,7 @@ void loop() {
      time_for_loop = (loop_end - loop_start);
      delayMicroseconds(10);
    }
-   //Serial.println(time_for_loop);
+   Serial.println(time_for_loop);
  }
  closedown();
 }
@@ -253,18 +257,20 @@ void GetData(){
   acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity;
   Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
   //read magnetometer
-  magnetometer.getHeading(&Mx, &My, &Mz);
+  magnetometer.getHeading(&My, &Mx, &Mz);
+  Mx += Mxoff;
+  My += Myoff;
+  Mz += Mzoff;
   Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
-  /*n++;
-  if (n>10){
+/*
     Serial.print("Mx ");
     Serial.print(Mx);
     Serial.print(" My "); 
     Serial.print(My);
     Serial.print(" Mz ");
-    Serial.println(Mz);
-    n=0;
-  }*/
+    Serial.println(Mz);*/
+    
+  
 }
 
 void updateR(){
@@ -297,13 +303,13 @@ void drift_correction(){
   float mest[3]; 
   Matrix.Multiply((float*)R1,(float*)mref,3,3,1,(float*)mest); //gest = R1 * gref
   float correction_mag[3], mmeas[3];
-  mmeas[0] = Mx/Mag_mag;
-  mmeas[1] = My/Mag_mag;
-  mmeas[2] = Mz/Mag_mag;
+  mmeas[0] = 1.0*Mx/Mag_mag;
+  mmeas[1] = -1.0*My/Mag_mag;
+  mmeas[2] = 1.0*Mz/Mag_mag;
   Matrix.Cross((float*) mest, (float*) mmeas, 1, 1, 1, (float*) correction_mag, 1, 1);
-  /*
+  
   n++;
-  if (n>10){
+  if (n>20){
     Serial.print("mestx ");
     Serial.print(mest[0]);
     Serial.print(" mesty "); 
@@ -311,16 +317,12 @@ void drift_correction(){
     Serial.print(" mestz ");
     Serial.println(mest[2]);
     Serial.print("mmeasx ");
-    Serial.print(gmeas[0]);
+    Serial.print(mmeas[0]);
     Serial.print(" mmeasy "); 
     Serial.print(mmeas[1]);
     Serial.print(" mmeasz ");
     Serial.println(mmeas[2]);
-    n=0;
-  }
-  
-  n++;
-  if (n>10){
+    
     Serial.print("gestx ");
     Serial.print(gest[0]);
     Serial.print(" gesty "); 
@@ -334,7 +336,7 @@ void drift_correction(){
     Serial.print(" gmeasz ");
     Serial.println(gmeas[2]);
     n=0;
-  }*/
+  }
   
   //combine corrections from accelerometer and magnetometer
   float total_correction[3];
@@ -343,7 +345,7 @@ void drift_correction(){
   total_correction[2] = correction_acc[2] + correction_mag[2];
   
   float w_correction[3];
-  float wKp= 1, wKi = 0;
+  float wKp= 0, wKi = 0;
   float time_for_loop_s=time_for_loop*1E-6;
   w_Icorrection[0] += wKi * total_correction[0] * time_for_loop_s;
   w_Icorrection[1] += wKi * total_correction[1] * time_for_loop_s;
@@ -353,9 +355,9 @@ void drift_correction(){
   w_correction[2] = wKp*total_correction[2] + w_Icorrection[2]; 
   
   //combine correction term with reading
-  w[0] = 0*w[0] - w_correction[0];
-  w[1] = 0*w[1] - w_correction[1];
-  w[2] = 0*w[2] - w_correction[2];
+  w[0] = w[0] - w_correction[0];
+  w[1] = w[1] - w_correction[1];
+  w[2] = w[2] - w_correction[2];
 }
 
 void closedown() {
