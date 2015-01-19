@@ -54,6 +54,8 @@ float acceleration[3]= {0,0,0}; // (x,y,z) vector
 bool hasLaunched = false;
 
 //prototypes
+void Gyro_calibration();
+void Get_ref_vectors();
 void GetData();
 void updateR();
 void drift_correction();
@@ -119,93 +121,11 @@ void setup() {
   //magnetometer.setMode(HMC5883L_MODE_CONTINUOUS); // can't get this to work
   //Serial.println(magnetometer.getMode());
   
-  delay(1000); //make sure everything is static
+  Gyro_calibration();
   
-  Serial.print(" w[0] ");
-  Serial.print(gyro.getRotationX());
-  Serial.print(" w[1] ");
-  Serial.print(gyro.getRotationY());
-  Serial.print(" w[2] ");
-  Serial.println(gyro.getRotationZ());
-     //Gyro Calibration
-  long GxCal=0, GyCal=0, GzCal=0; 
-  int n=200;
-  for (uint8_t i=0; i<n; i++) {
-    //Read the x,y and z output rates from the gyroscope and take an average of 50 results
-    GxCal += gyro.getRotationX();
-    GyCal += gyro.getRotationY();
-    GzCal += gyro.getRotationZ();
-    delay(10);
-  }
+  GetData();
   
-  Serial.print("GxCal ");
-  Serial.print(GxCal);
-  Serial.print(" GyCal "); 
-  Serial.print(GyCal);
-  Serial.print(" GzCal ");
-  Serial.println(GzCal);
-  //use these to find gyro offsets
-  GxOff=1.0*GxCal/n;
-  GyOff=1.0*GyCal/n;
-  GzOff=1.0*GzCal/n;
-  Serial.print("Gxoff ");
-  Serial.print(GxOff);
-  Serial.print(" Gyoff "); 
-  Serial.print(GyOff);
-  Serial.print(" Gzoff ");
-  Serial.println(GzOff);
-    
-  //accelerometer calibration
-  acceleration[0] = accelerometer.getAccelerationX();
-  acceleration[1] = accelerometer.getAccelerationY();
-  acceleration[2] = accelerometer.getAccelerationZ();
-  Serial.print(" ax ");
-  Serial.print(acceleration[0]);
-  Serial.print(" ay ");
-  Serial.print(acceleration[1]);
-  Serial.print(" az ");
-  Serial.println(acceleration[2]);
-  /*
-  acceleration[0] = (1.0*accelerometer.getAccelerationX() - Ax_off);
-  acceleration[1] = (1.0*accelerometer.getAccelerationY() - Ay_off);
-  acceleration[2] = (1.0*accelerometer.getAccelerationZ() - Az_off);
-  Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
-  Asensitivity=9.81/Mag_acc;
-  */
-  
-  Serial.print("Ax_off ");
-  Serial.print(Ax_off);
-  Serial.print(" Ay_off "); 
-  Serial.print(Ay_off);
-  Serial.print(" Az_off ");
-  Serial.println(Az_off);
-  Serial.print("100*Asensitivity ");
-  Serial.println(100*Asensitivity);
-  
-  //need to find the gravity vector with the R matrix zeroed
-  acceleration[0] = (accelerometer.getAccelerationX() - Ax_off)*Asensitivity*Axscale; // flip accelerometer axis so that they match gyro's
-  acceleration[1] = (accelerometer.getAccelerationY() - Ay_off)*Asensitivity*Ayscale;
-  acceleration[2] = (accelerometer.getAccelerationZ() - Az_off)*Asensitivity*Azscale;
-  Mag_acc = sqrt(acceleration[0]*acceleration[0]+acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]); //calucate the magnitude
-  gref[0] = acceleration[0]/Mag_acc;
-  gref[1] = acceleration[1]/Mag_acc;
-  gref[2] = acceleration[2]/Mag_acc;
-  
-  //need to find the magnetic vector with the R matrix zeroed
-  magnetometer.getHeading(&My, &Mx, &Mz); //note the axes don't match the other sensors
-  Mx -= Mxoff;
-  My -= Myoff;
-  Mz -= Mzoff;
-  Mx *= Mxscale;
-  My *= Myscale;
-  Mz *= Mzscale;
-  Mag_mag = sqrt(1.0*Mx*Mx + 1.0*My*My + 1.0*Mz*Mz); //calucate the magnitude
-  mref[0] = 1.0*Mx/Mag_mag;
-  mref[1] = -1.0*My/Mag_mag;
-  mref[2] = 1.0*Mz/Mag_mag;
-  
-  //print column headers
-  //textFile.println(F("Time\tTime for loop in ms\tAcc x\tAcc y\tAcc z\tGx Rate\tGy Rate\tGzRate"));
+  Get_ref_vectors();
 
   //if(textFile) digitalWrite(greenLedPin, HIGH );   // turn green LED on if file has been created successfully
   Serial.print("setup finished "); 
@@ -322,7 +242,7 @@ void drift_correction(){
   mmeas[2] = 1.0*Mz/Mag_mag;
   Matrix.Cross((float*) mest, (float*) mmeas, 1, 1, 1, (float*) correction_mag, 1, 1);
   
-  n++;
+  /*n++;
   if (n>20){
     /*Serial.print("mestx ");
     Serial.print(mest[0]);
@@ -336,7 +256,7 @@ void drift_correction(){
     Serial.print(mmeas[1]);
     Serial.print(" mmeasz ");
     Serial.println(mmeas[2]);
-    */
+    
     Serial.print("gestx ");
     Serial.print(gest[0]);
     Serial.print(" gesty "); 
@@ -356,7 +276,7 @@ void drift_correction(){
     Serial.print(" correction_accz ");
     Serial.println(correction_acc[2]);*/
     n=0;
-  }
+  }*/
   
   //combine corrections from accelerometer and magnetometer
   float total_correction[3];
@@ -421,4 +341,54 @@ void serialFloatPrint(float f) {
     Serial.print(c1);
     Serial.print(c2);
   }
+}
+
+void Gyro_calibration(){
+  delay(1000); //make sure everything is static
+  
+  Serial.print(" w[0] ");
+  Serial.print(gyro.getRotationX());
+  Serial.print(" w[1] ");
+  Serial.print(gyro.getRotationY());
+  Serial.print(" w[2] ");
+  Serial.println(gyro.getRotationZ());
+     //Gyro Calibration
+  long GxCal=0, GyCal=0, GzCal=0; 
+  int n=200;
+  for (uint8_t i=0; i<n; i++) {
+    //Read the x,y and z output rates from the gyroscope and take an average of 50 results
+    GxCal += gyro.getRotationX();
+    GyCal += gyro.getRotationY();
+    GzCal += gyro.getRotationZ();
+    delay(10);
+  }
+  
+  Serial.print("GxCal ");
+  Serial.print(GxCal);
+  Serial.print(" GyCal "); 
+  Serial.print(GyCal);
+  Serial.print(" GzCal ");
+  Serial.println(GzCal);
+  //use these to find gyro offsets
+  GxOff=1.0*GxCal/n;
+  GyOff=1.0*GyCal/n;
+  GzOff=1.0*GzCal/n;
+  Serial.print("Gxoff ");
+  Serial.print(GxOff);
+  Serial.print(" Gyoff "); 
+  Serial.print(GyOff);
+  Serial.print(" Gzoff ");
+  Serial.println(GzOff);
+}
+
+void Get_ref_vectors(){
+  //need to find the gravity vector with the R matrix zeroed
+  gref[0] = acceleration[0]/Mag_acc;
+  gref[1] = acceleration[1]/Mag_acc;
+  gref[2] = acceleration[2]/Mag_acc;
+  
+  //need to find the magnetic vector with the R matrix zeroed
+  mref[0] = 1.0*Mx/Mag_mag;
+  mref[1] = -1.0*My/Mag_mag;
+  mref[2] = 1.0*Mz/Mag_mag;
 }

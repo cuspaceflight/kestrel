@@ -1,6 +1,6 @@
 /**
 Visualize a cube which will assumes the orientation described
-in a quaternion coming from the serial port.
+in a matrix coming from the serial port.
 
 INSTRUCTIONS: 
 This program has to be run when you have the FreeIMU_serial
@@ -175,9 +175,9 @@ void drawCube() {
     
     // a demonstration of the following is at 
     // http://www.varesano.net/blog/fabio/ahrs-sensor-fusion-orientation-filter-3d-graphical-rotating-cube
-    rotateX(-Euler[0]);
-    rotateY(-Euler[1]);
     rotateZ(-Euler[2]);
+    rotateX(-Euler[1]);
+    rotateY(-Euler[0]);
     // euler[0] = psi
     // euler[1] = theta
     // euler[2] =  phi
