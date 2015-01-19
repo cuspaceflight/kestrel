@@ -175,9 +175,9 @@ void drawCube() {
     
     // a demonstration of the following is at 
     // http://www.varesano.net/blog/fabio/ahrs-sensor-fusion-orientation-filter-3d-graphical-rotating-cube
-    rotateZ(-Euler[2]);
-    rotateX(-Euler[1]);
-    rotateY(-Euler[0]);
+    rotateZ(Euler[2]);
+    rotateY(-Euler[1]);
+    rotateX(-Euler[0]);
     // euler[0] = psi
     // euler[1] = theta
     // euler[2] =  phi

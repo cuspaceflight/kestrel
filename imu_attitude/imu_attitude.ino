@@ -274,7 +274,7 @@ void drift_correction(){
     Serial.print(" correction_accy "); 
     Serial.print(correction_acc[1]);
     Serial.print(" correction_accz ");
-    Serial.println(correction_acc[2]);*/
+    Serial.println(correction_acc[2]);
     n=0;
   }*/
   
