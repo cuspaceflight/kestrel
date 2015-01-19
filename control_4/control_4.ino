@@ -47,12 +47,12 @@ Servo servo_3;  // create servo object to control a servo
                 // a maximum of eight servo objects can be created
 
 //check servo centering
-int pos1 = 90, pos2 = 90, pos3 = 90, s1, s2, s3, k = 0;    // variable to store the servo position
+int pos1 = 87, pos2 = 87, pos3 = 87, s1, s2, s3, k = 0;    // variable to store the servo position 0 degrees is with the servo arms pointing outwards
 const int smax = 150, smin = 30;
 float rP = 0, rY = 0, s_a, s_b, s_c;
 
 // PID constants
-const float Kp = 25, Ki = 0, Kd = 8; //Kp = 25, Ki = 2, Kd = 8;
+const float Kp = 25, Ki = 2, Kd = 8; //Kp = 25, Ki = 2, Kd = 8;
 
 //direction variables
 float w[3]; //angular velocity vector
@@ -135,7 +135,7 @@ void setup() {
   accelerometer.setMeasureEnabled(true);
   accelerometer.setOffset(0, 0, 0);  //for some strange reason setting these to 0 gave more false readings
 
-  delay(1000); //make sure everything is static
+  delay(5000); //make sure everything is static
   
      //Gyro Calibration
   long GxCal=0, GyCal=0, GzCal=0; 
@@ -180,7 +180,7 @@ void loop() {
     Mag_acc=sqrt(Ax*Ax+Ay*Ay+Az*Az)*Asensitivity; //calucate the magnitude
     
     //If statement to detect launch
-    if(Mag_acc>15 or hasLaunched==true) {
+    if(Mag_acc>11 or hasLaunched==true) {
     PID(); //time to do some control
     }
     else launch_time = micros();
@@ -193,8 +193,8 @@ void loop() {
     uint32_t record_time = micros() - launch_time; //time spent recording data can be calculated
 
     //if statement to stop the loop after motor burn has ended and deploy chute
-    if(record_time > 30E6) { //1E9 is 30 mins 3E7 is 30 seconds 5E6 is 5 seconds
-     delay(1000); //wait a second
+    if(record_time > 4E6) { //1E9 is 30 mins 3E7 is 30 seconds 4E6 is 4 seconds, motor burn is 3.3s so control for 4s
+     delay(1000); //wait a second for rocke to reach apogee 
      digitalWrite(recoveryPin, HIGH); //deploy chute
      delay(3000); //wait 3 seconds
      digitalWrite(recoveryPin, LOW); //turn off mosfet
