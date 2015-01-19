@@ -225,7 +225,7 @@ void loop() {
     
     updateR(); 
     
-    //serialcubeout((float*) R1, 9);
+    serialcubeout((float*) R1, 9);
     
     uint32_t record_time = micros() - launch_time; //time spent recording data 
     //Serial.print("time : ");
@@ -306,7 +306,7 @@ void drift_correction(){
   float R1T[3][3];
   Matrix.Transpose((float*) R1, 3, 3, (float*) R1T); // this seems wrong
   float gest[3]; 
-  Matrix.Multiply((float*)R1,(float*)gref,3,3,1,(float*)gest); //gest = R1 * gref
+  Matrix.Multiply((float*)R1T,(float*)gref,3,3,1,(float*)gest); //gest = R1 * gref
   float correction_acc[3], gmeas[3];
   gmeas[0] = acceleration[0]/Mag_acc;
   gmeas[1] = acceleration[1]/Mag_acc;
@@ -360,12 +360,12 @@ void drift_correction(){
   
   //combine corrections from accelerometer and magnetometer
   float total_correction[3];
-  total_correction[0] = correction_acc[0] + 0*correction_mag[0];
-  total_correction[1] = correction_acc[1] + 0*correction_mag[1];
-  total_correction[2] = correction_acc[2] + 0*correction_mag[2];
+  total_correction[0] = correction_acc[0] + correction_mag[0];
+  total_correction[1] = correction_acc[1] + correction_mag[1];
+  total_correction[2] = correction_acc[2] + correction_mag[2];
   
   float w_correction[3], w_correction2[3];
-  float wKp= 0.5, wKi = 0;
+  float wKp= 0.1, wKi = 0;
   float time_for_loop_s=time_for_loop*1E-6;
   w_Icorrection[0] += wKi * total_correction[0] * time_for_loop_s;
   w_Icorrection[1] += wKi * total_correction[1] * time_for_loop_s;
@@ -374,13 +374,12 @@ void drift_correction(){
   w_correction[1] = wKp*total_correction[1] + w_Icorrection[1]; 
   w_correction[2] = wKp*total_correction[2] + w_Icorrection[2]; 
   
-  
-  Matrix.Multiply((float*)R1T,(float*)w_correction,3,3,1,(float*)w_correction2); // rotate angular velocity vector to body frame
+  //Matrix.Multiply((float*)R1,(float*)w_correction,3,3,1,(float*)w_correction2); // rotate angular velocity vector to body frame
   
   //combine correction term with reading
-  w[0] = w[0] + w_correction2[0];
-  w[1] = w[1] + w_correction2[1];
-  w[2] = w[2] + w_correction2[2];
+  w[0] = w[0] - w_correction[0];
+  w[1] = w[1] - w_correction[1];
+  w[2] = w[2] - w_correction[2];
 }
 
 void closedown() {
